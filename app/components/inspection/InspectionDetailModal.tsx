@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { getChecklistForType } from '@/app/lib/inspectionChecklists';
 
 export interface InspectionRecord {
@@ -23,6 +23,7 @@ export interface InspectionRecord {
     location?: string;
     facility?: string;
     area?: string;
+    area_2?: string;
   } | null;
 }
 
@@ -34,10 +35,7 @@ interface InspectionDetailModalProps {
 export default function InspectionDetailModal({ inspection, onClose }: InspectionDetailModalProps) {
   const [inspectorSignature, setInspectorSignature] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     if (!inspection?.inspector_name) {
