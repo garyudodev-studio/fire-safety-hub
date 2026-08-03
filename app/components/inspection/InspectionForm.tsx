@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { getChecklistForType, EquipmentChecklist } from '@/app/lib/inspectionChecklists';
 import CameraCapture from './CameraCapture';
 
@@ -59,10 +59,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [fetchingData, setFetchingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getSupabaseClient();
 
   // Auto calculate Week and Month/Year whenever Inspection Date changes
   const updateWeekAndMonthYear = (dateStr: string) => {

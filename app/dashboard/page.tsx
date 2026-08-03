@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
@@ -116,10 +116,7 @@ export default function AdminDashboard() {
     const inlinePhotoInputRef = useRef<HTMLInputElement>(null);
     const pendingUploadRef = useRef<{ id: string; slot: 'pic_1_photo' | 'pic_2_photo' } | null>(null);
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    const supabase = getSupabaseClient();
     const router = useRouter();
 
     useEffect(() => {

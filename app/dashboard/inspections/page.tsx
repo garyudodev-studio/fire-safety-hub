@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseClient } from '@/app/lib/supabaseClient';
 
 import InspectionForm from '@/app/components/inspection/InspectionForm';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
@@ -29,10 +29,7 @@ export default function InspectionsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getSupabaseClient();
 
   const checkAuthAndFetch = async () => {
     setLoading(true);
