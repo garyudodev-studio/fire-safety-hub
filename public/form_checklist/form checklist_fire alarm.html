@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Check Fire Alarm Panel</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        /* Container disesuaikan dengan proporsi A4 */
+        .a4-container {
+            width: 210mm;
+            min-height: 297mm;
+            background-color: white;
+            padding: 10mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .text-blue {
+            color: #0000FF;
+            font-style: italic;
+        }
+        .bold {
+            font-weight: bold;
+        }
+        .bg-gray {
+            background-color: #d9d9d9;
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            border: 2px solid black;
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .logo-sec {
+            width: 20%;
+            border-right: 1px solid black;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+        }
+        .logo-circle {
+            width: 50px;
+            height: 50px;
+            background-color: #82D173; /* Hijau logo YJ */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .logo-text {
+            font-size: 6px;
+            text-align: center;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        .title-sec {
+            width: 55%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border-right: 1px solid black;
+            padding: 10px;
+        }
+        .title-sec h1 {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .title-sec h2 {
+            font-size: 13px;
+        }
+        .doc-info {
+            width: 25%;
+            font-size: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding-left: 10px;
+        }
+        .doc-info-row {
+            display: flex;
+        }
+        .doc-info-row span:first-child {
+            width: 65px;
+        }
+
+        /* Identity Info */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid black;
+            border-bottom: 1px solid black;
+            font-size: 11px;
+        }
+        .info-table td {
+            border: 1px solid black;
+            padding: 4px 8px;
+        }
+        
+        /* Main Checklist */
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid black;
+            border-top: none;
+            font-size: 10px;
+        }
+        .checklist-table th, .checklist-table td {
+            border: 1px solid black;
+            padding: 3px 5px;
+        }
+        .center {
+            text-align: center;
+        }
+        .section-row td {
+            background-color: #d9d9d9;
+            font-weight: bold;
+        }
+        
+        /* Footer / PIC & Signatures */
+        .footer-section {
+            display: flex;
+            margin-top: 8px;
+            gap: 8px;
+        }
+        
+        /* PIC Area */
+        .pic-area {
+            width: 45%;
+            border: 2px solid black;
+            display: flex;
+            flex-direction: column;
+        }
+        .pic-header {
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 4px;
+            border-bottom: 2px solid black;
+        }
+        .pic-profiles {
+            display: flex;
+            flex: 1;
+        }
+        .profile {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .profile:first-child {
+            border-right: 1px solid black;
+        }
+        .photo {
+            width: 100%;
+            height: 100px;
+            background-color: #E63946; /* Merah background foto */
+            border-bottom: 1px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+        }
+        .name {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 5px 0;
+            width: 100%;
+            text-align: center;
+            border-bottom: 1px solid black;
+        }
+        .qr-area {
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .qr-placeholder {
+            width: 55px;
+            height: 55px;
+            background: repeating-linear-gradient(45deg, #000, #000 2px, #fff 2px, #fff 4px);
+            margin-bottom: 5px;
+        }
+        .phone {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Signatures Area */
+        .sign-area {
+            width: 55%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .checker-row {
+            display: flex;
+            gap: 5px;
+        }
+        .box {
+            border: 1px solid black;
+            font-size: 10px;
+        }
+        .checker-box {
+            width: 50%;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+        }
+        .box-title {
+            font-weight: bold;
+            padding: 3px;
+            border-bottom: 1px solid black;
+            text-align: left;
+            padding-left: 5px;
+        }
+        .box-title.center { text-align: center; padding-left: 0; }
+        
+        .box-content {
+            flex: 1;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 5px;
+        }
+        
+        .keterangan-box { height: 60px; margin-top: 5px; }
+        .tindakan-box { height: 60px; margin-top: 5px; }
+        
+        .expert-box {
+            width: 200px;
+            height: 80px;
+            align-self: flex-end;
+            margin-top: 5px;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+<div class="a4-container">
+    
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-sec">
+            <div class="logo-circle">
+                <span style="color: blue; font-family: serif; font-size: 24px; font-weight: bold; font-style: italic;">Y<span style="color: yellow; font-size: 20px;">J</span></span>
+            </div>
+            <div class="logo-text">PT YONGJIN JAVASUKA GARMENT</div>
+        </div>
+        <div class="title-sec">
+            <h1>VISUAL CHECK FIRE ALARM PANEL</h1>
+            <h2>PT. YONGJIN JAVASUKA GARMENT FACTORY 1</h2>
+        </div>
+        <div class="doc-info">
+            <div class="doc-info-row"><span>No. Dok</span><span>: YJ-F.HSE.0037</span></div>
+            <div class="doc-info-row"><span>Tgl. Effective</span><span>: 14 Februari 2018</span></div>
+            <div class="doc-info-row"><span>No. Rev</span><span>: 02</span></div>
+        </div>
+    </div>
+
+    <!-- Identity & Info -->
+    <table class="info-table">
+        <tr>
+            <td width="15%" class="bold">ALARM ID</td>
+            <td width="35%" class="bold">: D3-001</td>
+            <td width="50%" colspan="2" class="bg-gray center bold">PERIKSA / <span class="text-blue">CHECK</span></td>
+        </tr>
+        <tr>
+            <td class="bold">AREA</td>
+            <td class="bold">: OFFICE</td>
+            <td colspan="2"><span class="bold">Bulan / Tahun</span><br><span class="text-blue">Month/ Year</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</td>
+        </tr>
+        <tr>
+            <td class="bold">LOCATION</td>
+            <td class="bold">: OFFICE LT 3</td>
+            <td width="25%"><span class="bold">Minggu</span><br><span class="text-blue">Week</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</td>
+            <td width="25%"><span class="bold">Minggu</span><br><span class="text-blue">Week</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</td>
+        </tr>
+    </table>
+
+    <!-- Checklist -->
+    <table class="checklist-table">
+        <!-- Section 1 Header & Dates -->
+        <tr class="bg-gray">
+            <td width="5%" rowspan="2" class="center bold">I</td>
+            <td width="45%" rowspan="2" class="bold">PEMERIKSAAN PANEL UTAMA / CENTRAL<br><span class="text-blue">MAIN PANEL ALARM CHECK</span></td>
+            <td width="25%" colspan="2" style="background-color: white; text-align: left;">
+                <span class="bold">Tanggal</span><br><span class="text-blue">Date</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
+            </td>
+            <td width="25%" colspan="2" style="background-color: white; text-align: left;">
+                <span class="bold">Tanggal</span><br><span class="text-blue">Date</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
+            </td>
+        </tr>
+        <tr class="center bold" style="background-color: white;">
+            <td width="12.5%">YA / <span class="text-blue">YES</span></td>
+            <td width="12.5%">TIDAK / <span class="text-blue">NO</span></td>
+            <td width="12.5%">YA / <span class="text-blue">YES</span></td>
+            <td width="12.5%">TIDAK / <span class="text-blue">NO</span></td>
+        </tr>
+
+        <!-- Section 1 Items -->
+        <tr>
+            <td class="center">1</td>
+            <td>TERDAPAT TANDA PENUNJUKAN LOKASI ALARM<br><span class="text-blue">SIGNS INDICATING ALARM LOCATION</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">2</td>
+            <td>PANEL ALARM DITANDAI DENGAN JELAS<br><span class="text-blue">DEVICES PROPERLY INDICATED AND MARKED</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">3</td>
+            <td>INDIKATOR DAYA (LISTRIK) DITANDAI DAN MENYALA<br><span class="text-blue">POWER INDICATOR IS MARKED AND ON</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">4</td>
+            <td>PANEL TIDAK TERHALANGI DAN TIDAK TERGANGGU APAPUN<br><span class="text-blue">PANEL FREE FROM ANY BLOCKING AND WITHOUT INTERRUPTION</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">5</td>
+            <td>TERDAPAT LAMPU TEST DAN BERFUNGSI DENGAN BAIK (SAAT TEST ALARM)<br><span class="text-blue">THERE IS A TEST LIGHT AND IT FUNCTIONS WELL (DURING TEST ALARM)</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+
+        <!-- Section 2 Header -->
+        <tr class="section-row">
+            <td class="center">II</td>
+            <td>PANEL ALARM DILOKASI PEMASANGAN<br><span class="text-blue">ANNUNICATOR PANEL ALARM</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+
+        <!-- Section 2 Items -->
+        <tr>
+            <td class="center">1</td>
+            <td>PENEMPATAN PANEL DI LOKASI YANG BENAR<br><span class="text-blue">PLACEMENT OF PANEL IN CORRECT LOCATION</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">2</td>
+            <td>INDIKATOR DAYA (LISTRIK) DITANDAI DAN MENYALA<br><span class="text-blue">POWER INDICATOR IS MARKED AND ON</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">3</td>
+            <td>TERDAPAT HEAT DETECTORE, SMOKE DETECTORE, DAN PENEMPATAN SESUAI<br><span class="text-blue">HEAT DETECTORS AND / OR SMOKE DETECORS LOCATION ACCPETABLE</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">4</td>
+            <td>LAMPU TEST BERFUNGSI DENGAN BAIK (SAAT TEST ALARM)<br><span class="text-blue">TEST LIGHT WORKS WELL (DURING TEST ALARM)</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+            <td class="center">5</td>
+            <td>PANEL TERDETEKSI DI MAIN PANEL (SAAT TEST ALARM)<br><span class="text-blue">PANEL DETECTED IN MAIN PANEL(DURING TEST ALARM)</span></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>
+    </table>
+
+    <!-- Footer Area -->
+    <div class="footer-section">
+        
+        <!-- PIC Area -->
+        <div class="pic-area">
+            <div class="pic-header">
+                PENANGGUNG JAWAB<br>
+                <span class="text-blue">PERSON IN CHARGE (PIC)</span>
+            </div>
+            <div class="pic-profiles">
+                <!-- Person 1 -->
+                <div class="profile">
+                    <div class="photo">FOTO PIC</div>
+                    <div class="name">Regiana Respatyansah</div>
+                    <div class="qr-area">
+                        <div class="qr-placeholder"></div>
+                        <div class="phone">082311547440</div>
+                    </div>
+                </div>
+                <!-- Person 2 -->
+                <div class="profile">
+                    <div class="photo">FOTO PIC</div>
+                    <div class="name">Karyono</div>
+                    <div class="qr-area">
+                        <div class="qr-placeholder"></div>
+                        <div class="phone">081585137154</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Remarks & Signatures -->
+        <div class="sign-area">
+            <div class="checker-row">
+                <div class="box checker-box">
+                    <div class="box-title center">PEMERIKSA / <span class="text-blue">CHECKER</span></div>
+                    <div class="box-content">( . . . . . . . . . . . . . . . . . . )</div>
+                </div>
+                <div class="box checker-box">
+                    <div class="box-title center">PEMERIKSA / <span class="text-blue">CHECKER</span></div>
+                    <div class="box-content">( . . . . . . . . . . . . . . . . . . )</div>
+                </div>
+            </div>
+            
+            <div class="box keterangan-box">
+                <div class="box-title" style="border:none;">KETERANGAN / <span class="text-blue">REMAKE :</span></div>
+            </div>
+            
+            <div class="box tindakan-box">
+                <div class="box-title" style="border:none;">TINDAKAN / <span class="text-blue">ACTION TAKEN :</span></div>
+            </div>
+
+            <div class="box expert-box">
+                <div class="box-title center">AHLI K3 UMUM<br><span class="text-blue">GENERAL OHS EXPERT</span></div>
+                <div class="box-content">( . . . . . . . . . . . . . . . . . . )</div>
+            </div>
+        </div>
+        
+    </div>
+
+</div>
+
+</body>
+</html>
