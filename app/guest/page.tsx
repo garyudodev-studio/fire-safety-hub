@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import Link from 'next/link';
