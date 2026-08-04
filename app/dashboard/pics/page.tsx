@@ -2,24 +2,38 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/components/ui/CustomModal';
+import ImageModal from '@/app/components/ui/ImageModal';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
 
 const initialFormData = {
     id: '',
     name: '',
-    phone: ''
+    phone: '',
+    entity: '',
+    facility: ''
 };
 
 export default function PICDashboard() {
     const [pics, setPics] = useState<any[]>([]);
+    const [uniqueEntities, setUniqueEntities] = useState<string[]>([]);
+    const [uniqueFacilities, setUniqueFacilities] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
-    
+
+    // Modal States
+    const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null);
+    const [alertModal, setAlertModal] = useState<AlertState | null>(null);
+    const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
     // UI State for Sheet
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [formData, setFormData] = useState(initialFormData);
-    
+
     // File states
     const [profileFile, setProfileFile] = useState<File | null>(null);
     const [contactFile, setContactFile] = useState<File | null>(null);
@@ -49,6 +63,16 @@ export default function PICDashboard() {
             .order('created_at', { ascending: false });
 
         if (!error && data) setPics(data);
+
+        // Fetch equipment entities & facilities for dropdown options
+        const { data: eqData } = await supabase.from('equipment').select('entity, facility');
+        if (eqData) {
+            const entities = Array.from(new Set(eqData.map(e => e.entity).filter(Boolean))) as string[];
+            const facilities = Array.from(new Set(eqData.map(e => e.facility).filter(Boolean))) as string[];
+            setUniqueEntities(entities.sort());
+            setUniqueFacilities(facilities.sort());
+        }
+
         setLoading(false);
     };
 
@@ -66,7 +90,9 @@ export default function PICDashboard() {
         setFormData({
             id: item.id || '',
             name: item.name || '',
-            phone: item.phone || ''
+            phone: item.phone || '',
+            entity: item.entity || '',
+            facility: item.facility || ''
         });
         setProfileFile(null);
         setContactFile(null);
@@ -78,14 +104,14 @@ export default function PICDashboard() {
         setIsSheetOpen(false);
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        
+
         let profileUrl = editingItem?.image_profile || null;
         let contactUrl = editingItem?.image_contact || null;
         let signatureUrl = editingItem?.signature_url || null;
@@ -106,13 +132,13 @@ export default function PICDashboard() {
             const { error: uploadError, data } = await supabase.storage
                 .from('pic_images')
                 .upload(fileName, profileFile, { upsert: true });
-            
+
             if (!uploadError && data) {
                 if (editingItem?.image_profile) await deleteOldFile('pic_images', editingItem.image_profile);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 profileUrl = publicUrl;
             } else if (uploadError) {
-                alert(`Profile Upload Error: ${uploadError.message}`);
+                setAlertModal({ isOpen: true, title: 'Upload Error', message: `Profile Upload Error: ${uploadError.message}`, type: 'error' });
             }
         }
 
@@ -123,13 +149,13 @@ export default function PICDashboard() {
             const { error: uploadError, data } = await supabase.storage
                 .from('pic_images')
                 .upload(fileName, contactFile, { upsert: true });
-            
+
             if (!uploadError && data) {
                 if (editingItem?.image_contact) await deleteOldFile('pic_images', editingItem.image_contact);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 contactUrl = publicUrl;
             } else if (uploadError) {
-                alert(`Contact Upload Error: ${uploadError.message}`);
+                setAlertModal({ isOpen: true, title: 'Upload Error', message: `Contact Card Upload Error: ${uploadError.message}`, type: 'error' });
             }
         }
 
@@ -140,19 +166,21 @@ export default function PICDashboard() {
             const { error: uploadError, data } = await supabase.storage
                 .from('pic_images')
                 .upload(fileName, signatureFile, { upsert: true });
-            
+
             if (!uploadError && data) {
                 if (editingItem?.signature_url) await deleteOldFile('pic_images', editingItem.signature_url);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 signatureUrl = publicUrl;
             } else if (uploadError) {
-                alert(`Signature Upload Error: ${uploadError.message}`);
+                setAlertModal({ isOpen: true, title: 'Upload Error', message: `Signature Upload Error: ${uploadError.message}`, type: 'error' });
             }
         }
 
-        const payload: any = { 
-            name: formData.name, 
+        const payload: any = {
+            name: formData.name,
             phone: formData.phone || null,
+            entity: formData.entity || null,
+            facility: formData.facility || null,
             image_profile: profileUrl,
             image_contact: contactUrl,
             signature_url: signatureUrl
@@ -163,49 +191,51 @@ export default function PICDashboard() {
         }
 
         const { error } = await supabase.from('pic').upsert(payload);
-        
+
         setIsSaving(false);
         if (!error) {
             closeSheet();
             fetchData();
         } else {
-            alert(error.message);
+            setAlertModal({ isOpen: true, title: 'Save Error', message: error.message, type: 'error' });
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this PIC?')) return;
-        
-        const picToDelete = pics.find(p => p.id === id);
-        const { error } = await supabase.from('pic').delete().eq('id', id);
-        
-        if (!error) {
-            fetchData();
-            if (picToDelete) {
-                const pathsToDelete = [];
-                if (picToDelete.image_profile) {
-                    const parts = picToDelete.image_profile.split('/');
-                    pathsToDelete.push(parts[parts.length - 1]);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete PIC',
+            message: 'Are you sure you want to delete this PIC profile?',
+            variant: 'danger',
+            onConfirm: async () => {
+                const picToDelete = pics.find(p => p.id === id);
+                if (picToDelete) {
+                    await deleteStorageFiles(supabase, 'pic_images', [
+                        picToDelete.image_profile,
+                        picToDelete.image_contact,
+                        picToDelete.signature_url
+                    ]);
                 }
-                if (picToDelete.image_contact) {
-                    const parts = picToDelete.image_contact.split('/');
-                    pathsToDelete.push(parts[parts.length - 1]);
-                }
-                if (picToDelete.signature_url) {
-                    const parts = picToDelete.signature_url.split('/');
-                    pathsToDelete.push(parts[parts.length - 1]);
-                }
-                if (pathsToDelete.length > 0) {
-                    supabase.storage.from('pic_images').remove(pathsToDelete);
+
+                const { error } = await supabase.from('pic').delete().eq('id', id);
+                if (!error) {
+                    fetchData();
+                } else {
+                    setAlertModal({ isOpen: true, title: 'Error', message: error.message, type: 'error' });
                 }
             }
-        } else {
-            alert(error.message);
-        }
+        });
     };
 
+    // Account creation state
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-    const [accountFormData, setAccountFormData] = useState({ email: '', password: '' });
+    const [accountFormData, setAccountFormData] = useState({
+        email: '',
+        password: '',
+        role: 'inspector',
+        entity: '',
+        facility: ''
+    });
     const [accountLoading, setAccountLoading] = useState(false);
     const [accountError, setAccountError] = useState<string | null>(null);
     const [selectedPicForAccount, setSelectedPicForAccount] = useState<any>(null);
@@ -224,7 +254,13 @@ export default function PICDashboard() {
 
     const openAccountModal = (pic: any) => {
         setSelectedPicForAccount(pic);
-        setAccountFormData({ email: '', password: '' });
+        setAccountFormData({
+            email: '',
+            password: '',
+            role: 'inspector',
+            entity: pic.entity || '',
+            facility: pic.facility || ''
+        });
         setAccountError(null);
         setIsAccountModalOpen(true);
     };
@@ -241,15 +277,24 @@ export default function PICDashboard() {
                 body: JSON.stringify({
                     email: accountFormData.email,
                     password: accountFormData.password,
-                    picId: selectedPicForAccount.id
+                    picId: selectedPicForAccount.id,
+                    role: accountFormData.role,
+                    entity: accountFormData.entity || null,
+                    facility: accountFormData.facility || null
                 })
             });
 
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to create account');
-            
-            alert('Inspector Account created successfully for ' + selectedPicForAccount.name);
+
+            setAlertModal({
+                isOpen: true,
+                title: 'Account Created',
+                message: `${accountFormData.role.toUpperCase()} Account created successfully for ${selectedPicForAccount.name}`,
+                type: 'success'
+            });
             setIsAccountModalOpen(false);
+            fetchData();
         } catch (err: any) {
             setAccountError(err.message);
         } finally {
@@ -268,11 +313,11 @@ export default function PICDashboard() {
                             </svg>
                         </div>
                         <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">Personnel</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">Personnel & Roles</p>
                             <h1 className="text-xl font-semibold tracking-tight text-ink-100 md:text-2xl">
-                                PIC Administration
+                                PIC & Inspector Administration
                             </h1>
-                            <p className="mt-0.5 text-sm text-ink-400">Manage Persons in Charge, contact cards & digital signatures</p>
+                            <p className="mt-0.5 text-sm text-ink-400">Manage PIC profiles, Inspector roles, assigned entity & facility scopes</p>
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2.5">
@@ -297,53 +342,75 @@ export default function PICDashboard() {
                 ) : (
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
                         {pics.map((item) => (
-                            <div key={item.id} className="panel flex flex-col items-center p-6 text-center transition-colors duration-200 hover:border-line-strong">
-                                <div className="relative mb-4">
-                                    {item.image_profile ? (
-                                        <img src={item.image_profile} alt={item.name} className="h-24 w-24 rounded-full border-2 border-line object-cover" />
-                                    ) : (
-                                        <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-line bg-ink-800 text-2xl font-bold text-ink-500">
-                                            {item.name.charAt(0).toUpperCase()}
+                            <div key={item.id} className="panel flex flex-col items-center p-6 text-center transition-colors duration-200 hover:border-line-strong justify-between">
+                                <div className="flex flex-col items-center w-full">
+                                    <div className="relative mb-3">
+                                        {item.image_profile ? (
+                                            <ProtectedImage
+                                                src={item.image_profile}
+                                                alt={item.name}
+                                                onPreview={() => setPreviewImage({ url: item.image_profile, title: `${item.name} - Profile Image` })}
+                                                className="h-24 w-24 rounded-full border-2 border-line object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-line bg-ink-800 text-2xl font-bold text-ink-500">
+                                                {item.name.charAt(0).toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <h3 className="text-lg font-semibold text-ink-100">{item.name}</h3>
+                                    <p className="text-xs text-ink-400 mt-0.5">{item.phone || 'No phone number'}</p>
+
+                                    {/* Entity & Facility Scope Badges */}
+                                    <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 w-full">
+                                        {item.entity ? (
+                                            <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60">
+                                                {item.entity}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] text-ink-600 italic">All Entities</span>
+                                        )}
+                                        {item.facility ? (
+                                            <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-950/80 text-sky-300 border border-sky-900/60">
+                                                {item.facility}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] text-ink-600 italic">All Facilities</span>
+                                        )}
+                                    </div>
+
+                                    {/* Signature preview */}
+                                    {item.signature_url && (
+                                        <div className="mt-3 h-10 w-28 bg-white/5 border border-line rounded-lg p-1 flex items-center justify-center">
+                                            <ProtectedImage
+                                                src={item.signature_url}
+                                                alt="Signature"
+                                                onPreview={() => setPreviewImage({ url: item.signature_url, title: `${item.name} - Digital Signature` })}
+                                                className="h-full object-contain"
+                                            />
                                         </div>
                                     )}
                                 </div>
 
-                                <h3 className="text-lg font-semibold text-ink-100">{item.name}</h3>
-                                <p className="mb-2 text-sm text-ink-400">{item.phone || 'No phone provided'}</p>
-
-                                {/* Signature Badge */}
-                                {item.signature_url ? (
-                                    <div className="my-3 p-2 rounded-xl bg-white/5 border border-line w-full flex flex-col items-center">
-                                        <span className="text-[10px] text-ink-500 font-semibold uppercase tracking-wider mb-1">Digital Signature</span>
-                                        <img src={item.signature_url} alt="Signature" className="h-10 object-contain invert dark:invert-0" />
-                                    </div>
-                                ) : (
-                                    <span className="my-2 text-[10px] text-ink-600 bg-ink-900 border border-line px-2 py-0.5 rounded-md">No Signature Attached</span>
-                                )}
-
-                                {item.image_contact && (
-                                    <a href={item.image_contact} target="_blank" rel="noreferrer" className="mb-4 text-xs font-medium text-ember-400 hover:text-ember-300 underline">
-                                        View Contact Card
-                                    </a>
-                                )}
-
-                                <div className="mt-auto flex w-full flex-col gap-2 pt-3 border-t border-line">
+                                <div className="mt-6 flex flex-col gap-2 w-full pt-4 border-t border-line">
                                     <button
                                         onClick={() => openAccountModal(item)}
-                                        className="btn btn-primary text-xs py-2 w-full"
+                                        className="btn btn-soft text-xs w-full justify-center text-ember-400 hover:text-ember-300"
                                     >
-                                        Create Inspector Account
+                                        Create User Account
                                     </button>
-                                    <div className="flex w-full gap-2">
+                                    <div className="flex gap-2 w-full">
                                         <button
                                             onClick={() => openEditSheet(item)}
-                                            className="btn btn-soft flex-1 py-2 text-xs"
+                                            className="btn btn-ghost text-xs flex-1 justify-center"
                                         >
                                             Edit
                                         </button>
                                         <button
                                             onClick={() => handleDelete(item.id)}
-                                            className="btn btn-danger-soft flex-1 py-2 text-xs"
+                                            className="btn btn-danger-soft text-xs px-3"
+                                            title="Delete PIC"
                                         >
                                             Delete
                                         </button>
@@ -351,164 +418,231 @@ export default function PICDashboard() {
                                 </div>
                             </div>
                         ))}
-                        {pics.length === 0 && (
-                            <div className="col-span-full rounded-2xl border border-dashed border-line py-16 text-center text-ink-500">
-                                No PICs found. Click "Add PIC" to create one.
-                            </div>
-                        )}
                     </div>
                 )}
             </div>
 
-            {/* --- Side/Bottom Sheet --- */}
+            {/* Create/Edit PIC Drawer */}
             {isSheetOpen && (
                 <>
-                    <div 
-                        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                        onClick={closeSheet}
-                    />
-                    <div className="fixed z-50 flex animate-rise flex-col border-line bg-ink-900
-                        bottom-0 left-0 right-0 h-[85vh] rounded-t-3xl border-t md:bottom-0 md:left-auto md:right-0 md:top-0 md:h-full md:w-[450px] md:rounded-none md:border-l"
-                        role="dialog" aria-modal="true"
-                    >
-                <div className="flex items-center justify-between border-b border-line p-6">
-                    <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">
-                            {editingItem ? 'Edit record' : 'New record'}
-                        </p>
-                        <h2 className="text-xl font-semibold text-ink-100">{editingItem ? 'Edit PIC' : 'Add PIC'}</h2>
+                    <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={closeSheet} />
+                    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-ink-900 border-l border-line p-6 overflow-y-auto flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
+                                <h2 className="text-lg font-bold text-ink-100">
+                                    {editingItem ? 'Edit PIC & Role Scope' : 'Add New PIC'}
+                                </h2>
+                                <button onClick={closeSheet} className="text-ink-400 hover:text-ink-100">✕</button>
+                            </div>
+
+                            <form id="pic-form" onSubmit={handleSave} className="space-y-4 text-xs">
+                                <div>
+                                    <label className="field-label">Full Name *</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleInputChange}
+                                        className="input text-xs"
+                                        placeholder="Full Name"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Phone Number</label>
+                                    <input
+                                        type="text"
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleInputChange}
+                                        className="input text-xs"
+                                        placeholder="+62 812..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Assigned Entity Scope</label>
+                                    <input
+                                        type="text"
+                                        name="entity"
+                                        value={formData.entity}
+                                        onChange={handleInputChange}
+                                        list="entities-list"
+                                        className="input text-xs"
+                                        placeholder="e.g. PT System Hub / All"
+                                    />
+                                    <datalist id="entities-list">
+                                        {uniqueEntities.map(e => <option key={e} value={e} />)}
+                                    </datalist>
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Assigned Facility Scope</label>
+                                    <input
+                                        type="text"
+                                        name="facility"
+                                        value={formData.facility}
+                                        onChange={handleInputChange}
+                                        list="facilities-list"
+                                        className="input text-xs"
+                                        placeholder="e.g. Building A / Main Office"
+                                    />
+                                    <datalist id="facilities-list">
+                                        {uniqueFacilities.map(f => <option key={f} value={f} />)}
+                                    </datalist>
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Profile Image</label>
+                                    {editingItem?.image_profile && (
+                                        <div className="mb-2">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={editingItem.image_profile} alt="Profile" className="h-16 w-16 rounded-full border border-line object-cover" />
+                                        </div>
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => setProfileFile(e.target.files?.[0] || null)}
+                                        className="input text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Digital Signature Image</label>
+                                    {editingItem?.signature_url && (
+                                        <div className="mb-2 h-12 w-28 bg-white/5 border border-line rounded p-1">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={editingItem.signature_url} alt="Signature" className="h-full object-contain" />
+                                        </div>
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
+                                        className="input text-xs"
+                                    />
+                                </div>
+                            </form>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-6 border-t border-line mt-6">
+                            <button type="button" onClick={closeSheet} className="btn btn-ghost text-xs">
+                                Cancel
+                            </button>
+                            <button type="submit" form="pic-form" disabled={isSaving} className="btn btn-primary text-xs">
+                                {isSaving ? 'Saving…' : 'Save PIC'}
+                            </button>
+                        </div>
                     </div>
-                    <button onClick={closeSheet} className="icon-btn" aria-label="Close">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                    </button>
-                </div>
+                </>
+            )}
 
-                <div className="flex-1 space-y-5 overflow-y-auto p-6">
-                    <form id="pic-form" onSubmit={handleSave} className="space-y-5">
-
-                        <div>
-                            <label className="field-label">Full Name *</label>
-                            <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="input" placeholder="e.g. John Doe" />
-                        </div>
-
-                        <div>
-                            <label className="field-label">Phone Number</label>
-                            <input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="input" placeholder="e.g. +1 234 567 8900" />
-                        </div>
-
-                        <div className="space-y-4 border-t border-line pt-5">
-                            <div>
-                                <label className="field-label">Profile Image</label>
-                                {editingItem?.image_profile && (
-                                    <div className="mb-2">
-                                        <img src={editingItem.image_profile} alt="Profile" className="h-16 w-16 rounded-full border border-line object-cover" />
-                                    </div>
-                                )}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setProfileFile(e.target.files?.[0] || null)}
-                                    className="w-full text-sm text-ink-400 file:mr-4 file:rounded-lg file:border-0 file:bg-white/[0.06] file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-200 hover:file:bg-white/[0.1]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="field-label">Digital Signature Image (PNG with transparent background recommended)</label>
-                                {editingItem?.signature_url && (
-                                    <div className="mb-2 p-2 rounded-xl bg-white/10 border border-line max-w-xs">
-                                        <img src={editingItem.signature_url} alt="Signature" className="h-12 object-contain" />
-                                    </div>
-                                )}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
-                                    className="w-full text-sm text-ink-400 file:mr-4 file:rounded-lg file:border-0 file:bg-white/[0.06] file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-200 hover:file:bg-white/[0.1]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="field-label">Contact Card Image</label>
-                                {editingItem?.image_contact && (
-                                    <div className="mb-2">
-                                        <img src={editingItem.image_contact} alt="Contact" className="h-16 w-16 rounded-lg border border-line object-cover" />
-                                    </div>
-                                )}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setContactFile(e.target.files?.[0] || null)}
-                                    className="w-full text-sm text-ink-400 file:mr-4 file:rounded-lg file:border-0 file:bg-white/[0.06] file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-200 hover:file:bg-white/[0.1]"
-                                />
-                            </div>
-                        </div>
-
-                    </form>
-                </div>
-
-                <div className="flex justify-end gap-3 border-t border-line bg-ink-950 p-6">
-                    <button type="button" onClick={closeSheet} className="btn btn-ghost">
-                        Cancel
-                    </button>
-                    <button type="submit" form="pic-form" disabled={isSaving} className="btn btn-primary disabled:opacity-50">
-                        {isSaving ? 'Uploading & Saving…' : 'Save PIC'}
-                    </button>
-                </div>
-            </div>
-      </>)}
-
-            {/* Create Account Modal */}
+            {/* Create User Account Modal with Role, Entity & Facility */}
             {isAccountModalOpen && selectedPicForAccount && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade">
                     <div className="relative w-full max-w-sm bg-ink-900 border border-line rounded-2xl shadow-2xl p-6">
-                        <h2 className="text-xl font-semibold text-ink-100">Create Inspector Account</h2>
-                        <p className="text-sm text-ink-400 mt-1 mb-5">
+                        <h2 className="text-xl font-semibold text-ink-100">Create User Account</h2>
+                        <p className="text-xs text-ink-400 mt-1 mb-4">
                             For <strong className="text-ink-200">{selectedPicForAccount.name}</strong>
                         </p>
 
                         {accountError && (
-                            <div className="mb-4 rounded-xl border border-rose-900/60 bg-rose-950/50 p-3 text-sm text-rose-300">
+                            <div className="mb-4 rounded-xl border border-rose-900/60 bg-rose-950/50 p-3 text-xs text-rose-300">
                                 {accountError}
                             </div>
                         )}
 
-                        <form onSubmit={handleCreateAccount} className="space-y-4">
+                        <form onSubmit={handleCreateAccount} className="space-y-3.5 text-xs">
                             <div>
-                                <label className="field-label">Email</label>
-                                <input 
-                                    required 
-                                    type="email" 
-                                    value={accountFormData.email} 
-                                    onChange={(e) => setAccountFormData({ ...accountFormData, email: e.target.value })} 
-                                    className="input text-sm" 
-                                    placeholder="inspector@example.com" 
+                                <label className="field-label text-[10px]">Email *</label>
+                                <input
+                                    required
+                                    type="email"
+                                    value={accountFormData.email}
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, email: e.target.value })}
+                                    className="input text-xs"
+                                    placeholder="inspector@example.com"
                                 />
                             </div>
+
                             <div>
-                                <label className="field-label">Password</label>
-                                <input 
-                                    required 
-                                    type="password" 
-                                    value={accountFormData.password} 
-                                    onChange={(e) => setAccountFormData({ ...accountFormData, password: e.target.value })} 
-                                    className="input text-sm" 
-                                    placeholder="••••••••" 
+                                <label className="field-label text-[10px]">Password *</label>
+                                <input
+                                    required
+                                    type="password"
+                                    value={accountFormData.password}
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, password: e.target.value })}
+                                    className="input text-xs"
+                                    placeholder="••••••••"
                                     minLength={6}
                                 />
                             </div>
-                            
+
+                            <div>
+                                <label className="field-label text-[10px]">User Role *</label>
+                                <select
+                                    value={accountFormData.role}
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, role: e.target.value })}
+                                    className="input text-xs"
+                                >
+                                    <option value="inspector">Inspector</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="field-label text-[10px]">Entity Scope</label>
+                                <input
+                                    type="text"
+                                    value={accountFormData.entity}
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, entity: e.target.value })}
+                                    className="input text-xs"
+                                    placeholder="Entity Name or blank for All"
+                                    list="acc-entities"
+                                />
+                                <datalist id="acc-entities">
+                                    {uniqueEntities.map(e => <option key={e} value={e} />)}
+                                </datalist>
+                            </div>
+
+                            <div>
+                                <label className="field-label text-[10px]">Facility Scope</label>
+                                <input
+                                    type="text"
+                                    value={accountFormData.facility}
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, facility: e.target.value })}
+                                    className="input text-xs"
+                                    placeholder="Facility Name or blank for All"
+                                    list="acc-facilities"
+                                />
+                                <datalist id="acc-facilities">
+                                    {uniqueFacilities.map(f => <option key={f} value={f} />)}
+                                </datalist>
+                            </div>
+
                             <div className="flex justify-end gap-3 pt-4 border-t border-line mt-6">
-                                <button type="button" onClick={() => setIsAccountModalOpen(false)} className="btn btn-ghost text-sm">
+                                <button type="button" onClick={() => setIsAccountModalOpen(false)} className="btn btn-ghost text-xs">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={accountLoading} className="btn btn-primary text-sm min-w-24">
-                                    {accountLoading ? 'Creating...' : 'Create'}
+                                <button type="submit" disabled={accountLoading} className="btn btn-primary text-xs min-w-24">
+                                    {accountLoading ? 'Creating...' : 'Create Account'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+
+            {/* Modals */}
+            <ConfirmModal state={confirmModal} onClose={() => setConfirmModal(null)} />
+            <AlertModal state={alertModal} onClose={() => setAlertModal(null)} />
+            <ImageModal
+                imageUrl={previewImage?.url || null}
+                title={previewImage?.title || 'Image Preview'}
+                onClose={() => setPreviewImage(null)}
+            />
         </div>
     );
 }

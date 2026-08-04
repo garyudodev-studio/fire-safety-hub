@@ -27,6 +27,9 @@ export interface InspectionRecord {
   } | null;
 }
 
+import ImageModal from '@/app/components/ui/ImageModal';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
+
 interface InspectionDetailModalProps {
   inspection: InspectionRecord | null;
   onClose: () => void;
@@ -34,6 +37,7 @@ interface InspectionDetailModalProps {
 
 export default function InspectionDetailModal({ inspection, onClose }: InspectionDetailModalProps) {
   const [inspectorSignature, setInspectorSignature] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const supabase = getSupabaseClient();
 
@@ -65,8 +69,8 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
   const checklist = getChecklistForType(inspection.equipment_type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/80 backdrop-blur-md overflow-y-auto animate-fade">
-      <div className="relative w-full max-w-4xl bg-ink-900 border border-line rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 bg-ink-950/80 backdrop-blur-md flex justify-center items-start animate-fade">
+      <div className="relative w-full max-w-4xl bg-ink-900 border border-line rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto sm:my-8">
         {/* Header */}
         <div className="p-6 border-b border-line flex items-center justify-between bg-ink-950/60 shrink-0">
           <div className="flex items-center gap-3">
@@ -128,10 +132,10 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
                     {idx === 0 ? 'Equipment Verification Photo (Live Captured)' : 'Printed Checklist Form Photo'}
                   </h4>
                   <div className="rounded-2xl overflow-hidden border border-line bg-black aspect-video flex items-center justify-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <ProtectedImage
                       src={url.trim()}
                       alt={`Photo ${idx + 1} for ${inspection.equipment_no_id}`}
+                      onPreview={() => setPreviewImage({ url: url.trim(), title: `${inspection.equipment_no_id} - ${idx === 0 ? 'Equipment Verification Photo' : 'Checklist Form Photo'}` })}
                       className="w-full h-full object-contain"
                     />
                   </div>
@@ -164,8 +168,12 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
 
                 {inspectorSignature ? (
                   <div className="h-12 w-28 bg-white/5 border border-line rounded-lg p-1 flex items-center justify-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={inspectorSignature} alt="Digital Signature" className="h-full object-contain" />
+                    <ProtectedImage
+                      src={inspectorSignature}
+                      alt="Digital Signature"
+                      onPreview={() => setPreviewImage({ url: inspectorSignature, title: `${inspection.inspector_name} - Digital Signature` })}
+                      className="h-full object-contain"
+                    />
                   </div>
                 ) : (
                   <span className="text-[10px] text-ink-500 italic">No signature on file</span>
@@ -234,6 +242,12 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
           </button>
         </div>
       </div>
+
+      <ImageModal
+        imageUrl={previewImage?.url || null}
+        title={previewImage?.title || 'Inspection Photo Preview'}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 }

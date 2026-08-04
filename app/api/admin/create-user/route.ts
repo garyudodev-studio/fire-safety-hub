@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
-    const { email, password, picId } = await request.json();
+    const { email, password, picId, role = 'inspector', entity = null, facility = null } = await request.json();
 
     if (!email || !password || !picId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -82,14 +82,24 @@ export async function POST(request: Request) {
       .from('profiles')
       .insert({
         id: authData.user.id,
-        role: 'inspector',
-        pic_id: picId
+        role: role || 'inspector',
+        pic_id: picId,
+        entity: entity || null,
+        facility: facility || null
       });
 
     if (profileError) {
       // Rollback auth user creation if profile insert fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json({ error: `Profile creation failed: ${profileError.message}` }, { status: 500 });
+    }
+
+    // Also update pic table if entity/facility provided
+    if (picId && (entity || facility)) {
+      await supabaseAdmin.from('pic').update({
+        entity: entity || null,
+        facility: facility || null
+      }).eq('id', picId);
     }
 
     return NextResponse.json({ success: true, user: authData.user });

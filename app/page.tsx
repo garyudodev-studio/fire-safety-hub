@@ -35,7 +35,7 @@ export default function LandingPage() {
     setLoading(true);
 
     const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
-    
+
     if (error) {
       setError(error.message);
       setLoading(false);
@@ -48,9 +48,9 @@ export default function LandingPage() {
         .select('role')
         .eq('id', authData.user.id)
         .single();
-      
+
       setLoading(false);
-      
+
       if (profile?.role === 'inspector') {
         router.push('/dashboard/inspections');
       } else {
@@ -101,7 +101,7 @@ export default function LandingPage() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-16 border-t lg:border-t-0 lg:border-l border-line bg-ink-900/40">
         <div className="w-full max-w-sm animate-rise">
           <div className="panel p-8">
-            <h2 className="text-xl font-semibold text-ink-100">Welcome back Garyudo.</h2>
+            <h2 className="text-xl font-semibold text-ink-100">Welcome back.</h2>
             <p className="text-sm text-ink-400 mt-1 mb-7">
               Sign in to manage equipment and inspections.
             </p>

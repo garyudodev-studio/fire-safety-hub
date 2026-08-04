@@ -81,6 +81,7 @@ export default function Sidebar() {
   const [role, setRole] = useState<string>('admin');
   const [userName, setUserName] = useState<string>('');
   const [userEmail, setUserEmail] = useState<string>('');
+  const [userScope, setUserScope] = useState<string>('');
   const [userImage, setUserImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,9 +89,20 @@ export default function Sidebar() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUserEmail(session.user.email || '');
-        const { data } = await supabase.from('profiles').select('role, pic:pic_id(name, image_profile)').eq('id', session.user.id).single() as any;
+        const { data } = await supabase
+          .from('profiles')
+          .select('role, entity, facility, pic:pic_id(name, image_profile, entity, facility)')
+          .eq('id', session.user.id)
+          .single() as any;
+
         if (data?.role) {
           setRole(data.role);
+          const entity = data.entity || data.pic?.entity;
+          const facility = data.facility || data.pic?.facility;
+          if (entity || facility) {
+            setUserScope([entity, facility].filter(Boolean).join(' · '));
+          }
+
           if (data.pic?.name) {
             setUserName(data.pic.name);
             if (data.pic.image_profile) {
@@ -199,6 +211,7 @@ export default function Sidebar() {
                 <span className="text-sm font-medium text-ink-200 truncate">{displayName}</span>
                 <span className="text-[11px] text-ink-500 truncate capitalize">
                   {role === 'admin' ? 'Admin User' : role}
+                  {userScope && <span className="text-[10px] text-ember-400 block truncate">{userScope}</span>}
                 </span>
               </div>
             )}

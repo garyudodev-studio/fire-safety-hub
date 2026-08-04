@@ -5,25 +5,36 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface EquipmentMaster {
+  id: string;
+  no_id: string;
+  type: string;
+  entity: string | null;
+  facility: string | null;
+  area: string | null;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
-    case 'Fire Alarm':         return 'bg-ember-950/60 text-ember-300 border-ember-900/60';
-    case 'Fire Hydrant':       return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
-    case 'Fire Extinguisher':  return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
-    case 'Emergency Lamp':     return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-    case 'Emergency Exit Lamp':return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
-    default:                   return 'bg-white/[0.04] text-ink-300 border-line';
+    case 'Fire Alarm':          return 'bg-ember-950/60 text-ember-300 border-ember-900/60';
+    case 'Fire Hydrant':        return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
+    case 'Fire Extinguisher':   return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
+    case 'Emergency Lamp':      return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
+    case 'Emergency Exit Lamp': return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
+    default:                    return 'bg-white/[0.04] text-ink-300 border-line';
   }
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  'Fire Extinguisher':  '#f97316',
-  'Fire Alarm':         '#ef4444',
-  'Fire Hydrant':       '#38bdf8',
-  'Emergency Lamp':     '#fbbf24',
-  'Emergency Exit Lamp':'#34d399',
+  'Fire Extinguisher':   '#f97316',
+  'Fire Alarm':          '#ef4444',
+  'Fire Hydrant':        '#38bdf8',
+  'Emergency Lamp':      '#fbbf24',
+  'Emergency Exit Lamp': '#34d399',
 };
 
 const EQUIPMENT_TYPES = [
@@ -47,17 +58,10 @@ function firstOfMonthStr() {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function KpiCard({
-  label,
-  value,
-  sub,
-  color = 'text-ink-100',
-  borderColor = '',
+  label, value, sub, color = 'text-ink-100', borderColor = '',
 }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  color?: string;
-  borderColor?: string;
+  label: string; value: string | number; sub?: string;
+  color?: string; borderColor?: string;
 }) {
   return (
     <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
@@ -81,9 +85,7 @@ function PassRateRing({ rate }: { rate: number }) {
           <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
           <circle
             cx="48" cy="48" r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth="8"
+            fill="none" stroke={color} strokeWidth="8"
             strokeDasharray={`${dash} ${circ}`}
             strokeLinecap="round"
             transform="rotate(-90 48 48)"
@@ -97,77 +99,184 @@ function PassRateRing({ rate }: { rate: number }) {
   );
 }
 
-function TypeBreakdown({ inspections }: { inspections: InspectionRecord[] }) {
-  const rows = EQUIPMENT_TYPES.map((t) => {
-    const group = inspections.filter((i) => i.equipment_type === t);
-    const pass = group.filter((i) => i.status === 'PASS').length;
-    const rate = group.length > 0 ? Math.round((pass / group.length) * 100) : null;
-    return { type: t, total: group.length, pass, rate };
-  }).filter((r) => r.total > 0);
+/**
+ * Equipment Type Breakdown
+ * Shows: inspected_count / total_masterlist_count, plus pass count out of inspections
+ *
+ * Bar visual:
+ *   full-width track = total masterlist equipment for this type
+ *   lighter shade    = inspected so far (any status)
+ *   solid fill       = PASS inspections
+ */
+function TypeBreakdown({
+  inspections,
+  masterlist,
+  dateFrom,
+  dateTo,
+}: {
+  inspections: InspectionRecord[];
+  masterlist: EquipmentMaster[];
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const totalMasterlistAll = masterlist.length;
+  const uniqueAllInspected = new Set(inspections.map((i) => i.equipment_no_id)).size;
+  const overallPending = Math.max(0, totalMasterlistAll - uniqueAllInspected);
+  const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueAllInspected / totalMasterlistAll) * 100) : 0;
 
-  if (rows.length === 0) return null;
-  const maxTotal = Math.max(...rows.map((r) => r.total));
+  const datePeriodText =
+    dateFrom || dateTo
+      ? `${dateFrom || 'Start'} to ${dateTo || 'Today'}`
+      : 'All Recorded Dates';
+
+  const rows = EQUIPMENT_TYPES.map((t) => {
+    const totalEquip  = masterlist.filter((e) => e.type === t).length;
+    const inspected   = inspections.filter((i) => i.equipment_type === t);
+    // unique equipment IDs inspected in the date window
+    const uniqueInspectedIds = new Set(inspected.map((i) => i.equipment_no_id));
+    const inspectedCount = uniqueInspectedIds.size;
+    const passCount = inspected.filter((i) => i.status === 'PASS').length;
+    const notInspected = Math.max(0, totalEquip - inspectedCount);
+    const passRate = inspected.length > 0 ? Math.round((passCount / inspected.length) * 100) : null;
+    const coverage = totalEquip > 0 ? Math.round((inspectedCount / totalEquip) * 100) : null;
+
+    return { type: t, totalEquip, inspectedCount, passCount, notInspected, passRate, coverage, inspections: inspected };
+  }).filter((r) => r.totalEquip > 0 || r.inspectedCount > 0);
+
+  if (rows.length === 0) return (
+    <div className="panel p-5 flex items-center justify-center text-ink-600 text-sm">
+      No equipment data available
+    </div>
+  );
+
+  const maxEquip = Math.max(...rows.map((r) => Math.max(r.totalEquip, 1)));
 
   return (
-    <div className="panel p-5 space-y-3">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Equipment Type Breakdown</h3>
-      <div className="space-y-3">
+    <div className="panel p-5 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-line pb-3">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-ink-200 flex items-center gap-2">
+            Equipment Coverage Breakdown
+            <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60 font-mono">
+              📅 Period: {datePeriodText}
+            </span>
+          </h3>
+          <p className="text-xs text-ink-400 mt-1">
+            Masterlist total: <strong className="text-ink-100">{totalMasterlistAll}</strong> equipment · Inspected: <strong className="text-sky-300">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
+          </p>
+        </div>
+
+        <div>
+          {overallPending === 0 ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-900/60">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              100% Fully Inspected
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-900/60">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {overallPending} Equipment Pending Inspection
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 pt-1">
         {rows.map((r) => {
           const col = TYPE_COLORS[r.type] ?? '#8b91a0';
-          const barW = maxTotal > 0 ? (r.total / maxTotal) * 100 : 0;
-          const passW = r.total > 0 ? (r.pass / r.total) * 100 : 0;
+          const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
+          const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
+          const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
+
           return (
-            <div key={r.type} className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-ink-300 font-medium truncate max-w-[160px]">{r.type}</span>
-                <span className="text-ink-500 shrink-0 ml-2">
-                  {r.pass}/{r.total} &nbsp;
-                  {r.rate !== null && (
-                    <span style={{ color: col }} className="font-bold">{r.rate}%</span>
+            <div key={r.type} className="space-y-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+                <span className="text-ink-200 font-semibold truncate">{r.type}</span>
+                <div className="flex items-center gap-2 shrink-0 text-ink-400">
+                  <span className="bg-ink-850 px-2 py-0.5 rounded border border-line">
+                    Inspected: <strong className="text-ink-100">{r.inspectedCount}</strong> / <span className="text-ink-300">{r.totalEquip} Masterlist Total</span>
+                  </span>
+                  {r.passRate !== null && (
+                    <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
                   )}
-                </span>
-              </div>
-              {/* background track */}
-              <div className="h-2 rounded-full bg-ink-800 overflow-hidden">
-                {/* total width bar */}
-                <div
-                  className="h-full rounded-full relative overflow-hidden"
-                  style={{ width: `${barW}%`, backgroundColor: `${col}30` }}
-                >
-                  {/* pass fill */}
-                  <div
-                    className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                    style={{ width: `${passW}%`, backgroundColor: col }}
-                  />
+                  {r.notInspected > 0 ? (
+                    <span className="text-amber-400 font-bold bg-amber-950/50 border border-amber-900/50 px-2 py-0.5 rounded text-[11px]">
+                      {r.notInspected} Not Yet Inspected
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-900/50 px-2 py-0.5 rounded text-[11px]">
+                      ✓ Complete
+                    </span>
+                  )}
                 </div>
+              </div>
+
+              {/* Three-layer bar */}
+              <div className="relative h-3 rounded-full bg-ink-800 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
+                {/* layer 1: inspected portion */}
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                  style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
+                />
+                {/* layer 2: pass portion */}
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                  style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
+                />
+              </div>
+
+              {/* Coverage % details */}
+              <div className="flex items-center justify-between text-[11px] text-ink-500">
+                <span>
+                  {r.coverage}% of total masterlist equipment inspected in this period
+                </span>
+                {r.notInspected > 0 && (
+                  <span className="text-amber-400">
+                    {r.notInspected} equipment remaining for this period
+                  </span>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Alert banner if pending items remain */}
+      {overallPending > 0 && (
+        <div className="mt-3 rounded-xl bg-amber-950/40 border border-amber-900/50 p-3.5 text-xs text-amber-300 flex items-start gap-2.5">
+          <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <p className="font-bold">Inspection Period Incomplete ({datePeriodText})</p>
+            <p className="mt-0.5 text-amber-300/80">
+              <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
+              Ensure all equipment items receive inspection.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function Pagination({
-  total,
-  page,
-  pageSize,
-  onChange,
+  total, page, pageSize, onChange,
 }: {
-  total: number;
-  page: number;
-  pageSize: number;
-  onChange: (p: number) => void;
+  total: number; page: number; pageSize: number; onChange: (p: number) => void;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
 
-  // Show up to 5 page numbers around current
   const pages: (number | '…')[] = [];
-  const window = 2;
-  let lo = Math.max(1, page - window);
-  let hi = Math.min(totalPages, page + window);
+  const win = 2;
+  const lo = Math.max(1, page - win);
+  const hi = Math.min(totalPages, page + win);
   if (lo > 1) { pages.push(1); if (lo > 2) pages.push('…'); }
   for (let i = lo; i <= hi; i++) pages.push(i);
   if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
@@ -178,35 +287,22 @@ function Pagination({
         {total === 0 ? '0 results' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
       </span>
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onChange(page - 1)}
-          disabled={page <= 1}
-          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
+        <button onClick={() => onChange(page - 1)} disabled={page <= 1}
+          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           ‹ Prev
         </button>
         {pages.map((p, idx) =>
           p === '…' ? (
             <span key={`e${idx}`} className="px-1.5 text-ink-600 text-xs">…</span>
           ) : (
-            <button
-              key={p}
-              onClick={() => onChange(p as number)}
-              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${
-                p === page
-                  ? 'bg-ember-600 text-white'
-                  : 'text-ink-400 hover:bg-ink-800'
-              }`}
-            >
+            <button key={p} onClick={() => onChange(p as number)}
+              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p === page ? 'bg-ember-600 text-white' : 'text-ink-400 hover:bg-ink-800'}`}>
               {p}
             </button>
           )
         )}
-        <button
-          onClick={() => onChange(page + 1)}
-          disabled={page >= totalPages}
-          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
+        <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
+          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           Next ›
         </button>
       </div>
@@ -223,20 +319,30 @@ export default function ReportsPage() {
   const supabase = getSupabaseClient();
 
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
+  const [masterlist,  setMasterlist]  = useState<EquipmentMaster[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState('All');
+  const [selectedType,     setSelectedType]     = useState('All');
+  const [selectedEntity,   setSelectedEntity]   = useState('All');
+  const [selectedFacility, setSelectedFacility] = useState('All');
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
 
   // Tab & pagination
-  const [activeTab, setActiveTab] = useState<TabKey>('unsafe');
-  const [unsafePage, setUnsafePage] = useState(1);
-  const [safePage, setSafePage] = useState(1);
+  const [activeTab,   setActiveTab]   = useState<TabKey>('unsafe');
+  const [unsafePage,  setUnsafePage]  = useState(1);
+  const [safePage,    setSafePage]    = useState(1);
+
+  // ── Derived filter options from masterlist ──
+  const uniqueEntities   = useMemo(() => ['All', ...Array.from(new Set(masterlist.map(e => e.entity).filter(Boolean) as string[])).sort()], [masterlist]);
+  const uniqueFacilities = useMemo(() => {
+    const base = masterlist.filter(e => selectedEntity === 'All' || e.entity === selectedEntity);
+    return ['All', ...Array.from(new Set(base.map(e => e.facility).filter(Boolean) as string[])).sort()];
+  }, [masterlist, selectedEntity]);
 
   // ── Fetch ──
   const fetchData = useCallback(async () => {
@@ -244,21 +350,39 @@ export default function ReportsPage() {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) { router.push('/'); return; }
 
-    const { data, error } = await supabase
-      .from('inspections')
-      .select(`*, equipment:equipment_id(location, facility, area)`)
-      .order('created_at', { ascending: false });
+    const [inspRes, masterRes, profileRes] = await Promise.all([
+      supabase
+        .from('inspections')
+        .select(`*, equipment:equipment_id(location, facility, area, entity)`)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('equipment')
+        .select('id, no_id, type, entity, facility, area'),
+      supabase
+        .from('profiles')
+        .select('role, entity, facility, pic:pic_id(entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single()
+    ]);
 
-    if (!error && data) {
-      setInspections(data as InspectionRecord[]);
+    if (!inspRes.error   && inspRes.data)   setInspections(inspRes.data as InspectionRecord[]);
+    if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
+
+    if (profileRes.data) {
+      const userProfile = profileRes.data;
+      const assignedEntity = userProfile.entity || (userProfile.pic as any)?.entity;
+      const assignedFacility = userProfile.facility || (userProfile.pic as any)?.facility;
+      if (assignedEntity) setSelectedEntity(assignedEntity);
+      if (assignedFacility) setSelectedFacility(assignedFacility);
     }
+
     setLastFetched(new Date());
     setLoading(false);
   }, [router, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Apply filters ──
+  // ── Apply filters to inspections ──
   const filteredInspections = useMemo(() => {
     return inspections.filter((item) => {
       const matchSearch =
@@ -266,15 +390,30 @@ export default function ReportsPage() {
         item.inspector_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.equipment_type.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchType = selectedType === 'All' || item.equipment_type === selectedType;
+      const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
+      // Entity and facility come from the joined equipment relation
+      const entity   = (item.equipment as any)?.entity   ?? '';
+      const facility = (item.equipment as any)?.facility ?? '';
+      const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
 
-      const itemDate = item.inspection_date; // 'YYYY-MM-DD'
+      const itemDate  = item.inspection_date;
       const matchFrom = !dateFrom || itemDate >= dateFrom;
       const matchTo   = !dateTo   || itemDate <= dateTo;
 
-      return matchSearch && matchType && matchFrom && matchTo;
+      return matchSearch && matchType && matchEntity && matchFacility && matchFrom && matchTo;
     });
-  }, [inspections, searchQuery, selectedType, dateFrom, dateTo]);
+  }, [inspections, searchQuery, selectedType, selectedEntity, selectedFacility, dateFrom, dateTo]);
+
+  // ── Apply same entity/facility/type filter to masterlist for coverage numbers ──
+  const filteredMasterlist = useMemo(() => {
+    return masterlist.filter((e) => {
+      const matchType     = selectedType     === 'All' || e.type     === selectedType;
+      const matchEntity   = selectedEntity   === 'All' || e.entity   === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || e.facility === selectedFacility;
+      return matchType && matchEntity && matchFacility;
+    });
+  }, [masterlist, selectedType, selectedEntity, selectedFacility]);
 
   const unsafeRows = useMemo(() => filteredInspections.filter(i => i.status !== 'PASS'), [filteredInspections]);
   const safeRows   = useMemo(() => filteredInspections.filter(i => i.status === 'PASS'),  [filteredInspections]);
@@ -284,23 +423,25 @@ export default function ReportsPage() {
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
 
-  // Reset page when filters change
-  useEffect(() => { setUnsafePage(1); setSafePage(1); }, [searchQuery, selectedType, dateFrom, dateTo]);
+  // Coverage KPI
+  const uniqueInspectedSet = useMemo(() => new Set(filteredInspections.map(i => i.equipment_no_id)), [filteredInspections]);
+  const totalMasterlistCount = filteredMasterlist.length;
+  const inspectedCount = uniqueInspectedSet.size;
+  const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
+
+  // Reset pages when filters change
+  useEffect(() => { setUnsafePage(1); setSafePage(1); }, [searchQuery, selectedType, selectedEntity, selectedFacility, dateFrom, dateTo]);
+  // Reset facility when entity changes
+  useEffect(() => { setSelectedFacility('All'); }, [selectedEntity]);
 
   // ── Pagination slices ──
-  const unsafeSlice = useMemo(() =>
-    unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE),
-    [unsafeRows, unsafePage]);
-  const safeSlice = useMemo(() =>
-    safeRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [safeRows, safePage]);
+  const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
+  const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
 
   const setThisMonth = () => { setDateFrom(firstOfMonthStr()); setDateTo(todayStr()); };
   const clearDates   = () => { setDateFrom(''); setDateTo(''); };
 
   // ─── Render ──────────────────────────────────────────────────────────────
-
-  const tableHeaderCls = 'border-b border-line';
 
   const renderTable = (rows: InspectionRecord[], tab: TabKey, page: number, setPage: (p: number) => void) => {
     const isUnsafe = tab === 'unsafe';
@@ -325,9 +466,10 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className={`${tableHeaderCls} bg-ink-950/40`}>
+                  <tr className="border-b border-line bg-ink-950/40">
                     <th className="th">Equipment ID</th>
                     <th className="th">Type</th>
+                    <th className="th">Entity / Facility</th>
                     <th className="th">Date / Period</th>
                     <th className="th">Inspector</th>
                     <th className="th">Remarks</th>
@@ -335,42 +477,47 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {rows.map((item) => (
-                    <tr
-                      key={item.id}
-                      onClick={() => setViewingRecord(item)}
-                      className={`transition-colors cursor-pointer group ${
-                        isUnsafe
-                          ? 'hover:bg-rose-950/10'
-                          : 'hover:bg-emerald-950/10'
-                      }`}
-                    >
-                      <td className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
-                        {item.equipment_no_id}
-                      </td>
-                      <td className="td">
-                        <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
-                          {item.equipment_type}
-                        </span>
-                      </td>
-                      <td className="td text-xs text-ink-300">
-                        <div>{item.inspection_date}</div>
-                        <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
-                      </td>
-                      <td className="td text-xs text-ink-200">{item.inspector_name}</td>
-                      <td className="td text-xs text-ink-400 max-w-[200px] truncate">
-                        {item.remarks || <span className="italic text-ink-600">No remarks</span>}
-                      </td>
-                      <td className="td text-right">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
-                          className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
-                        >
-                          Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {rows.map((item) => {
+                    const entity   = (item.equipment as any)?.entity   ?? '';
+                    const facility = (item.equipment as any)?.facility ?? '';
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setViewingRecord(item)}
+                        className={`transition-colors cursor-pointer ${isUnsafe ? 'hover:bg-rose-950/10' : 'hover:bg-emerald-950/10'}`}
+                      >
+                        <td className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          {item.equipment_no_id}
+                        </td>
+                        <td className="td">
+                          <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
+                            {item.equipment_type}
+                          </span>
+                        </td>
+                        <td className="td text-xs">
+                          {entity && <div className="text-ink-200 font-medium">{entity}</div>}
+                          {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
+                          {!entity && !facility && <span className="text-ink-600 italic">—</span>}
+                        </td>
+                        <td className="td text-xs text-ink-300">
+                          <div>{item.inspection_date}</div>
+                          <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
+                        </td>
+                        <td className="td text-xs text-ink-200">{item.inspector_name}</td>
+                        <td className="td text-xs text-ink-400 max-w-[180px] truncate">
+                          {item.remarks || <span className="italic text-ink-600">No remarks</span>}
+                        </td>
+                        <td className="td text-right">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
+                            className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -397,7 +544,7 @@ export default function ReportsPage() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-ink-100">Inspection Reports</h1>
                 <p className="text-xs text-ink-400 mt-0.5">
-                  Monitor safety conditions and track equipment requiring immediate attention.
+                  Monitor safety conditions and track equipment coverage within inspection periods.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -407,8 +554,7 @@ export default function ReportsPage() {
                   </span>
                 )}
                 <button
-                  onClick={fetchData}
-                  disabled={loading}
+                  onClick={fetchData} disabled={loading}
                   className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-2"
                   title="Refresh data"
                 >
@@ -423,87 +569,86 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Filter row */}
+            {/* Filter row — row 1: search, entity, facility, type */}
             <div className="flex flex-wrap items-end gap-3">
-              {/* Search */}
-              <div className="flex-1 min-w-[160px]">
+              <div className="flex-1 min-w-[140px]">
                 <label className="field-label text-[10px]">Search</label>
                 <input
-                  type="text"
-                  value={searchQuery}
+                  type="text" value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ID, inspector, type…"
                   className="input text-xs"
                 />
               </div>
 
-              {/* Type filter */}
-              <div className="flex-1 min-w-[140px]">
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Entity</label>
+                <select value={selectedEntity} onChange={(e) => setSelectedEntity(e.target.value)} className="input text-xs">
+                  {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Facility</label>
+                <select value={selectedFacility} onChange={(e) => setSelectedFacility(e.target.value)} className="input text-xs">
+                  {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
                 <label className="field-label text-[10px]">Equipment Type</label>
-                <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="input text-xs"
-                >
+                <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="input text-xs">
                   <option value="All">All Types</option>
                   {EQUIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+            </div>
 
-              {/* Date from */}
+            {/* Filter row 2: dates */}
+            <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="field-label text-[10px]">From</label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="input text-xs w-36"
-                />
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-xs w-36" />
               </div>
-
-              {/* Date to */}
               <div>
                 <label className="field-label text-[10px]">To</label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="input text-xs w-36"
-                />
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-xs w-36" />
               </div>
-
-              {/* Quick picks */}
               <div className="flex gap-2 pb-0.5">
-                <button
-                  onClick={setThisMonth}
-                  className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap"
-                >
+                <button onClick={setThisMonth} className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">
                   This Month
                 </button>
                 {(dateFrom || dateTo) && (
-                  <button
-                    onClick={clearDates}
-                    className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300"
-                  >
-                    Clear
+                  <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                    Clear Dates
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ── KPI Cards + Pass Ring + Type Breakdown ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="col-span-2 md:col-span-3 lg:col-span-2 grid grid-cols-2 gap-4">
-              <KpiCard label="Total" value={totalInspections} sub="All filtered" color="text-ink-100" />
-              <KpiCard label="Needs Attention" value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
-              <KpiCard label="Safe" value={safeCount} sub="PASS results" color="text-emerald-400" borderColor="border-emerald-900/30" />
-              <PassRateRing rate={passRate} />
-            </div>
-            <div className="col-span-2 md:col-span-3 lg:col-span-4">
-              <TypeBreakdown inspections={filteredInspections} />
-            </div>
+          {/* ── KPI Cards ── */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
+            <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
+            <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-400" borderColor="border-emerald-900/30" />
+            <KpiCard
+              label="Not Inspected"
+              value={notInspectedCount}
+              sub={`of ${totalMasterlistCount} total equipment`}
+              color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
+              borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
+            />
+            <PassRateRing rate={passRate} />
           </div>
+
+          {/* ── Coverage Breakdown ── */}
+          <TypeBreakdown
+            inspections={filteredInspections}
+            masterlist={filteredMasterlist}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+          />
 
           {/* ── Tabbed Table ── */}
           <div className="panel overflow-hidden p-0">
@@ -512,9 +657,7 @@ export default function ReportsPage() {
               <button
                 onClick={() => setActiveTab('unsafe')}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === 'unsafe'
-                    ? 'border-rose-500 text-rose-400'
-                    : 'border-transparent text-ink-500 hover:text-ink-300'
+                  activeTab === 'unsafe' ? 'border-rose-500 text-rose-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -522,9 +665,7 @@ export default function ReportsPage() {
                   <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
                 Unsafe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'unsafe' ? 'bg-rose-950/80 text-rose-300' : 'bg-ink-800 text-ink-500'
-                }`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-950/80 text-rose-300' : 'bg-ink-800 text-ink-500'}`}>
                   {unsafeCount}
                 </span>
               </button>
@@ -532,9 +673,7 @@ export default function ReportsPage() {
               <button
                 onClick={() => setActiveTab('safe')}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === 'safe'
-                    ? 'border-emerald-500 text-emerald-400'
-                    : 'border-transparent text-ink-500 hover:text-ink-300'
+                  activeTab === 'safe' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -542,31 +681,22 @@ export default function ReportsPage() {
                   <polyline points="9 12 11 14 15 10" />
                 </svg>
                 Safe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'safe' ? 'bg-emerald-950/80 text-emerald-300' : 'bg-ink-800 text-ink-500'
-                }`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-950/80 text-emerald-300' : 'bg-ink-800 text-ink-500'}`}>
                   {safeCount}
                 </span>
               </button>
             </div>
 
-            {/* Section label */}
             <div className={`px-5 py-3 text-xs font-semibold uppercase tracking-wider border-b border-line ${
-              activeTab === 'unsafe'
-                ? 'text-rose-400 bg-rose-950/10'
-                : 'text-emerald-400 bg-emerald-950/10'
+              activeTab === 'unsafe' ? 'text-rose-400 bg-rose-950/10' : 'text-emerald-400 bg-emerald-950/10'
             }`}>
-              {activeTab === 'unsafe'
-                ? '⚠️ Requires immediate follow-up'
-                : '✅ Equipment in safe condition'}
+              {activeTab === 'unsafe' ? '⚠️ Requires immediate follow-up' : '✅ Equipment in safe condition'}
             </div>
 
-            {/* Table */}
             {activeTab === 'unsafe'
               ? renderTable(unsafeSlice, 'unsafe', unsafePage, setUnsafePage)
               : renderTable(safeSlice,   'safe',   safePage,   setSafePage)}
           </div>
-
         </div>
       </div>
 

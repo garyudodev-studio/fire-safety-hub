@@ -84,6 +84,13 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     updateWeekAndMonthYear(inspectionDate);
   }, [inspectionDate]);
 
+  // Scroll to top of modal container whenever component mounts or selected equipment changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const modalContainers = document.querySelectorAll('.fixed.overflow-y-auto');
+    modalContainers.forEach(el => el.scrollTo({ top: 0, behavior: 'instant' }));
+  }, [selectedEquipment]);
+
   // Fetch masterlist equipment and PICs
   useEffect(() => {
     const loadData = async () => {

@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/components/ui/CustomModal';
+import ImageModal from '@/app/components/ui/ImageModal';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
 
 /* ---------- Icons (line style, inherit color) ---------- */
 const Icon = ({ children, size = 16 }: { children: React.ReactNode; size?: number }) => (
@@ -87,6 +91,11 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
+    // Modal States
+    const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null);
+    const [alertModal, setAlertModal] = useState<AlertState | null>(null);
+    const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
     // Filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [filterEntity, setFilterEntity] = useState('');
@@ -144,6 +153,22 @@ export default function AdminDashboard() {
         const { data: picsData } = await supabase.from('pic').select('id, name, phone, image_profile, image_contact');
         if (picsData) setPics(picsData);
 
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role, entity, facility, pic:pic_id(entity, facility)')
+                .eq('id', session.user.id)
+                .single();
+
+            if (profile) {
+                const assignedEntity = profile.entity || (profile.pic as any)?.entity;
+                const assignedFacility = profile.facility || (profile.pic as any)?.facility;
+                if (assignedEntity) setFilterEntity(assignedEntity);
+                if (assignedFacility) setFilterFacility(assignedFacility);
+            }
+        }
+
         setLoading(false);
     };
 
@@ -152,6 +177,30 @@ export default function AdminDashboard() {
     const uniqueFacilities = Array.from(new Set(equipment.map(e => e.facility).filter(Boolean))).sort();
     const uniqueTypes = Array.from(new Set(equipment.map(e => e.type).filter(Boolean))).sort();
     const uniqueAreas = Array.from(new Set(equipment.map(e => e.area).filter(Boolean))).sort();
+
+    // --- Fire Extinguisher Expiry Monitoring ---
+    const today = new Date(); today.setHours(0,0,0,0);
+    const in30Days = new Date(today); in30Days.setDate(today.getDate() + 30);
+    const expiringExtinguishers = equipment.filter(item => {
+        if (item.type !== 'Fire Extinguisher' || !item.expire_date) return false;
+        const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
+        return exp <= in30Days;
+    }).map(item => {
+        const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
+        const daysLeft = Math.round((exp.getTime() - today.getTime()) / 86400000);
+        return { ...item, daysLeft, expired: daysLeft < 0 };
+    }).sort((a,b) => a.daysLeft - b.daysLeft);
+
+    const getExpiryStatus = (item: any): { label: string; cls: string } | null => {
+        if (item.type !== 'Fire Extinguisher' || !item.expire_date) return null;
+        const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
+        const days = Math.round((exp.getTime() - today.getTime()) / 86400000);
+        if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
+        if (days === 0) return { label: 'Expires today!', cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
+        if (days <= 7)  return { label: `Expires in ${days}d`, cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
+        if (days <= 30) return { label: `Expires in ${days}d`, cls: 'bg-amber-950/80 text-amber-300 border-amber-800/60' };
+        return null;
+    };
 
     // --- Filtered data ---
     const filteredEquipment = equipment.filter(item => {
@@ -252,18 +301,47 @@ export default function AdminDashboard() {
             closeSheet();
             fetchData();
         } else {
-            alert(error.message);
+            setAlertModal({ isOpen: true, title: 'Save Error', message: error.message, type: 'error' });
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this equipment?')) return;
-        const { error } = await supabase.from('equipment').delete().eq('id', id);
-        if (!error) {
-            fetchData();
-        } else {
-            alert(error.message);
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Equipment',
+            message: 'Are you sure you want to delete this equipment? All associated storage photos and inspection logs will also be removed.',
+            variant: 'danger',
+            onConfirm: async () => {
+                // 1. Find equipment & its photos
+                const targetEq = equipment.find(e => e.id === id);
+                if (targetEq) {
+                    await deleteStorageFiles(supabase, 'equipment_photos', [targetEq.pic_1_photo, targetEq.pic_2_photo]);
+                    
+                    // List any extra files stored in folder `{id}/` in equipment_photos
+                    const { data: folderFiles } = await supabase.storage.from('equipment_photos').list(id);
+                    if (folderFiles && folderFiles.length > 0) {
+                        const folderPaths = folderFiles.map(f => `${id}/${f.name}`);
+                        await supabase.storage.from('equipment_photos').remove(folderPaths);
+                    }
+                }
+
+                // 2. Find and delete photos from related inspection logs
+                const { data: relatedInspections } = await supabase.from('inspections').select('photo_url').eq('equipment_id', id);
+                if (relatedInspections && relatedInspections.length > 0) {
+                    const inspUrls = relatedInspections.map(i => i.photo_url);
+                    await deleteStorageFiles(supabase, 'inspection_photos', inspUrls);
+                    await supabase.from('inspections').delete().eq('equipment_id', id);
+                }
+
+                // 3. Delete the equipment record
+                const { error } = await supabase.from('equipment').delete().eq('id', id);
+                if (!error) {
+                    fetchData();
+                } else {
+                    setAlertModal({ isOpen: true, title: 'Error', message: error.message, type: 'error' });
+                }
+            }
+        });
     };
 
     // --- Photo Upload ---
@@ -289,7 +367,7 @@ export default function AdminDashboard() {
 
         if (error) {
             console.error('Error uploading photo:', error);
-            alert('Failed to upload photo.');
+            setAlertModal({ isOpen: true, title: 'Upload Failed', message: 'Failed to upload photo.', type: 'error' });
             return null;
         }
 
@@ -306,7 +384,7 @@ export default function AdminDashboard() {
             .eq('id', id);
 
         if (dbError) {
-            alert(`DB update failed: ${dbError.message}`);
+            setAlertModal({ isOpen: true, title: 'DB Update Error', message: `DB update failed: ${dbError.message}`, type: 'error' });
             return;
         }
 
@@ -317,7 +395,7 @@ export default function AdminDashboard() {
         const val = value === '' ? null : value;
         const { error } = await supabase.from('equipment').update({ [field]: val, updated_at: new Date().toISOString() }).eq('id', id);
         if (!error) fetchData();
-        else alert(`Failed to assign PIC: ${error.message}`);
+        else setAlertModal({ isOpen: true, title: 'Error', message: `Failed to assign PIC: ${error.message}`, type: 'error' });
     };
 
     const handleInlinePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -486,7 +564,7 @@ export default function AdminDashboard() {
         try {
             await generatePrintHTML([item]);
         } catch (err) {
-            alert('Failed to load checklist template.');
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load checklist template.', type: 'error' });
         }
     };
 
@@ -495,7 +573,7 @@ export default function AdminDashboard() {
         try {
             await generatePrintHTML(filteredEquipment);
         } catch (err) {
-            alert('Failed to load checklist templates.');
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load checklist templates.', type: 'error' });
         }
     };
 
@@ -553,28 +631,34 @@ export default function AdminDashboard() {
 
     const handleBulkAssign = async (field: 'pic_1_id' | 'pic_2_id', picId: string) => {
         if (selectedIds.size === 0) return;
-        if (!confirm(`Are you sure you want to assign this PIC to ${selectedIds.size} items?`)) {
-            if (field === 'pic_1_id') setBulkPic1('');
-            if (field === 'pic_2_id') setBulkPic2('');
-            return;
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Bulk Assign PIC',
+            message: `Are you sure you want to assign this PIC to ${selectedIds.size} items?`,
+            variant: 'primary',
+            onConfirm: async () => {
+                const val = picId === '' ? null : picId;
+                const ids = Array.from(selectedIds);
 
-        const val = picId === '' ? null : picId;
-        const ids = Array.from(selectedIds);
+                const { error } = await supabase.from('equipment')
+                    .update({ [field]: val, updated_at: new Date().toISOString() })
+                    .in('id', ids);
 
-        const { error } = await supabase.from('equipment')
-            .update({ [field]: val, updated_at: new Date().toISOString() })
-            .in('id', ids);
-
-        if (!error) {
-            fetchData();
-            setSelectedIds(new Set());
-            if (field === 'pic_1_id') setBulkPic1('');
-            if (field === 'pic_2_id') setBulkPic2('');
-            alert('Bulk assignment successful!');
-        } else {
-            alert(`Failed to assign PIC: ${error.message}`);
-        }
+                if (!error) {
+                    fetchData();
+                    setSelectedIds(new Set());
+                    if (field === 'pic_1_id') setBulkPic1('');
+                    if (field === 'pic_2_id') setBulkPic2('');
+                    setAlertModal({ isOpen: true, title: 'Success', message: 'Bulk assignment successful!', type: 'success' });
+                } else {
+                    setAlertModal({ isOpen: true, title: 'Error', message: `Failed to assign PIC: ${error.message}`, type: 'error' });
+                }
+            },
+            onCancel: () => {
+                if (field === 'pic_1_id') setBulkPic1('');
+                if (field === 'pic_2_id') setBulkPic2('');
+            }
+        });
     };
 
     const triggerFileInput = () => {
@@ -627,13 +711,13 @@ export default function AdminDashboard() {
                 if (formattedData.length > 0) {
                     const { error } = await supabase.from('equipment').insert(formattedData);
                     if (error) throw error;
-                    alert(`Successfully imported ${formattedData.length} records!`);
+                    setAlertModal({ isOpen: true, title: 'Import Complete', message: `Successfully imported ${formattedData.length} records!`, type: 'success' });
                     fetchData();
                 } else {
-                    alert('No valid records found. Make sure no_id and type are provided.');
+                    setAlertModal({ isOpen: true, title: 'Import Warning', message: 'No valid records found. Make sure no_id and type are provided.', type: 'info' });
                 }
             } catch (err: any) {
-                alert(`Error parsing Excel file: ${err.message}`);
+                setAlertModal({ isOpen: true, title: 'Import Error', message: `Error parsing Excel file: ${err.message}`, type: 'error' });
             } finally {
                 setIsImporting(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -657,6 +741,39 @@ export default function AdminDashboard() {
     return (
         <div className="min-h-screen bg-ink-950 text-ink-200 p-4 md:p-8">
             <div className="max-w-[1600px] mx-auto">
+
+                {/* 🔴 Expiry Alert Banner */}
+                {expiringExtinguishers.length > 0 && (
+                    <div className="mb-5 rounded-2xl border border-amber-900/50 bg-amber-950/30 p-4 flex items-start gap-3 animate-rise">
+                        <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-amber-300">
+                                {expiringExtinguishers.filter(e => e.expired).length > 0
+                                    ? `⚠️ ${expiringExtinguishers.filter(e=>e.expired).length} Fire Extinguisher(s) EXPIRED — immediate replacement required`
+                                    : `⏰ ${expiringExtinguishers.length} Fire Extinguisher(s) expiring within 30 days`
+                                }
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {expiringExtinguishers.slice(0, 8).map(item => (
+                                    <span key={item.id} className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium ${
+                                        item.expired ? 'bg-rose-950/80 text-rose-300 border-rose-800/60' : 'bg-amber-950/80 text-amber-300 border-amber-800/60'
+                                    }`}>
+                                        <span className="font-bold font-mono">{item.no_id}</span>
+                                        <span className="text-[10px] opacity-75">{item.expired ? `expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft}d left`}</span>
+                                    </span>
+                                ))}
+                                {expiringExtinguishers.length > 8 && (
+                                    <span className="text-xs text-amber-500/70">+{expiringExtinguishers.length - 8} more</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Header */}
                 <header className="panel flex flex-col gap-5 p-6 mb-6 md:flex-row md:items-center md:justify-between">
@@ -840,13 +957,22 @@ export default function AdminDashboard() {
                     /* --- GRID VIEW --- */
                     <>
                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {paginatedEquipment.map((item) => (
-                                <div key={item.id} className="panel group flex flex-col p-5 transition-colors duration-200 hover:border-line-strong">
+                            {paginatedEquipment.map((item) => {
+                                const expiryBadge = getExpiryStatus(item);
+                                return (
+                                <div key={item.id} className={`panel group flex flex-col p-5 transition-colors duration-200 hover:border-line-strong ${expiryBadge ? 'border-amber-900/50' : ''}`}>
                                     <div className="mb-3 flex items-start justify-between gap-2">
                                         <span className="id-pill">{item.no_id}</span>
-                                        <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium ${getTypeBadgeColor(item.type)}`}>
-                                            {item.type}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium ${getTypeBadgeColor(item.type)}`}>
+                                                {item.type}
+                                            </span>
+                                            {expiryBadge && (
+                                                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold ${expiryBadge.cls}`}>
+                                                    ⏰ {expiryBadge.label}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <h3 className="mb-0.5 truncate text-base font-semibold text-ink-100">{item.location}</h3>
@@ -905,8 +1031,8 @@ export default function AdminDashboard() {
                                             <TrashIcon />
                                         </button>
                                     </div>
-                                </div>
-                            ))}
+                                </div>);
+                            })}
                             {filteredEquipment.length === 0 && (
                                 <div className="col-span-full flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line py-20 text-ink-500">
                                     <SearchIcon />
@@ -958,9 +1084,10 @@ export default function AdminDashboard() {
                                         {paginatedEquipment.map((item) => {
                                             const isUploading1 = uploadingPhoto?.id === item.id && uploadingPhoto?.slot === 'pic_1_photo';
                                             const isUploading2 = uploadingPhoto?.id === item.id && uploadingPhoto?.slot === 'pic_2_photo';
+                                            const expiryBadge = getExpiryStatus(item);
 
                                             return (
-                                                <tr key={item.id} className={`transition-colors group hover:bg-white/[0.03] ${selectedIds.has(item.id) ? 'bg-white/[0.03]' : ''}`}>
+                                                <tr key={item.id} className={`transition-colors group hover:bg-white/[0.03] ${selectedIds.has(item.id) ? 'bg-white/[0.03]' : ''} ${expiryBadge ? 'bg-amber-950/10' : ''}`}>
                                                     <td className="td text-center">
                                                         <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} className="h-4 w-4 rounded border-line bg-ink-850 text-ember-500 focus:ring-ember-500 focus:ring-offset-ink-950" />
                                                     </td>
@@ -968,7 +1095,12 @@ export default function AdminDashboard() {
                                                         <span className="id-pill">{item.no_id}</span>
                                                     </td>
                                                     <td className="td">
-                                                        <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.type)}`}>{item.type}</span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.type)}`}>{item.type}</span>
+                                                            {expiryBadge && (
+                                                                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${expiryBadge.cls}`}>⏰ {expiryBadge.label}</span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="td text-ink-300">{item.entity || '-'}</td>
                                                     <td className="td text-ink-300">{item.facility || '-'}</td>
@@ -1289,6 +1421,15 @@ export default function AdminDashboard() {
                 </div>
             </div>
       </>)}
+
+            {/* Modals */}
+            <ConfirmModal state={confirmModal} onClose={() => setConfirmModal(null)} />
+            <AlertModal state={alertModal} onClose={() => setAlertModal(null)} />
+            <ImageModal
+                imageUrl={previewImage?.url || null}
+                title={previewImage?.title || 'Image Preview'}
+                onClose={() => setPreviewImage(null)}
+            />
         </div>
     );
 }
