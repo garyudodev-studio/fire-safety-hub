@@ -235,7 +235,7 @@ export default function GuestDashboard() {
                           className="w-12 h-9 rounded-lg overflow-hidden border border-line bg-black cursor-pointer hover:ring-2 hover:ring-ember-500 transition-all"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={item.photo_url} alt="Equipment Photo" className="w-full h-full object-cover" />
+                          <img src={item.photo_url.split(',')[0].trim()} alt="Equipment Photo" className="w-full h-full object-cover" />
                         </div>
                       </td>
                       <td className="td text-right">

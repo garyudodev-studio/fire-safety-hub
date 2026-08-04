@@ -247,7 +247,7 @@ export default function InspectionsPage() {
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={item.photo_url}
+                              src={item.photo_url.split(',')[0].trim()}
                               alt="Equipment"
                               className="w-full h-full object-cover"
                             />

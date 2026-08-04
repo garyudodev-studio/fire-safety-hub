@@ -90,6 +90,15 @@ export default function PICDashboard() {
         let contactUrl = editingItem?.image_contact || null;
         let signatureUrl = editingItem?.signature_url || null;
 
+        const deleteOldFile = async (bucket: string, url: string | null) => {
+            if (!url) return;
+            const parts = url.split('/');
+            const filename = parts.pop();
+            if (filename) {
+                await supabase.storage.from(bucket).remove([filename]);
+            }
+        };
+
         // Upload Profile Image
         if (profileFile) {
             const ext = profileFile.name.split('.').pop();
@@ -99,6 +108,7 @@ export default function PICDashboard() {
                 .upload(fileName, profileFile, { upsert: true });
             
             if (!uploadError && data) {
+                if (editingItem?.image_profile) await deleteOldFile('pic_images', editingItem.image_profile);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 profileUrl = publicUrl;
             } else if (uploadError) {
@@ -115,6 +125,7 @@ export default function PICDashboard() {
                 .upload(fileName, contactFile, { upsert: true });
             
             if (!uploadError && data) {
+                if (editingItem?.image_contact) await deleteOldFile('pic_images', editingItem.image_contact);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 contactUrl = publicUrl;
             } else if (uploadError) {
@@ -131,6 +142,7 @@ export default function PICDashboard() {
                 .upload(fileName, signatureFile, { upsert: true });
             
             if (!uploadError && data) {
+                if (editingItem?.signature_url) await deleteOldFile('pic_images', editingItem.signature_url);
                 const { data: { publicUrl } } = supabase.storage.from('pic_images').getPublicUrl(data.path);
                 signatureUrl = publicUrl;
             } else if (uploadError) {
@@ -192,14 +204,58 @@ export default function PICDashboard() {
         }
     };
 
+    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+    const [accountFormData, setAccountFormData] = useState({ email: '', password: '' });
+    const [accountLoading, setAccountLoading] = useState(false);
+    const [accountError, setAccountError] = useState<string | null>(null);
+    const [selectedPicForAccount, setSelectedPicForAccount] = useState<any>(null);
+
     useEffect(() => {
-        if (!isSheetOpen) return;
+        if (!isSheetOpen && !isAccountModalOpen) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') closeSheet();
+            if (e.key === 'Escape') {
+                closeSheet();
+                setIsAccountModalOpen(false);
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [isSheetOpen]);
+    }, [isSheetOpen, isAccountModalOpen]);
+
+    const openAccountModal = (pic: any) => {
+        setSelectedPicForAccount(pic);
+        setAccountFormData({ email: '', password: '' });
+        setAccountError(null);
+        setIsAccountModalOpen(true);
+    };
+
+    const handleCreateAccount = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAccountLoading(true);
+        setAccountError(null);
+
+        try {
+            const res = await fetch('/api/admin/create-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: accountFormData.email,
+                    password: accountFormData.password,
+                    picId: selectedPicForAccount.id
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to create account');
+            
+            alert('Inspector Account created successfully for ' + selectedPicForAccount.name);
+            setIsAccountModalOpen(false);
+        } catch (err: any) {
+            setAccountError(err.message);
+        } finally {
+            setAccountLoading(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-ink-950 text-ink-200 p-4 md:p-8">
@@ -271,19 +327,27 @@ export default function PICDashboard() {
                                     </a>
                                 )}
 
-                                <div className="mt-auto flex w-full gap-2 pt-3 border-t border-line">
+                                <div className="mt-auto flex w-full flex-col gap-2 pt-3 border-t border-line">
                                     <button
-                                        onClick={() => openEditSheet(item)}
-                                        className="btn btn-soft flex-1 py-2"
+                                        onClick={() => openAccountModal(item)}
+                                        className="btn btn-primary text-xs py-2 w-full"
                                     >
-                                        Edit
+                                        Create Inspector Account
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(item.id)}
-                                        className="btn btn-danger-soft py-2"
-                                    >
-                                        Delete
-                                    </button>
+                                    <div className="flex w-full gap-2">
+                                        <button
+                                            onClick={() => openEditSheet(item)}
+                                            className="btn btn-soft flex-1 py-2 text-xs"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(item.id)}
+                                            className="btn btn-danger-soft flex-1 py-2 text-xs"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -392,6 +456,59 @@ export default function PICDashboard() {
                 </div>
             </div>
       </>)}
+
+            {/* Create Account Modal */}
+            {isAccountModalOpen && selectedPicForAccount && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade">
+                    <div className="relative w-full max-w-sm bg-ink-900 border border-line rounded-2xl shadow-2xl p-6">
+                        <h2 className="text-xl font-semibold text-ink-100">Create Inspector Account</h2>
+                        <p className="text-sm text-ink-400 mt-1 mb-5">
+                            For <strong className="text-ink-200">{selectedPicForAccount.name}</strong>
+                        </p>
+
+                        {accountError && (
+                            <div className="mb-4 rounded-xl border border-rose-900/60 bg-rose-950/50 p-3 text-sm text-rose-300">
+                                {accountError}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleCreateAccount} className="space-y-4">
+                            <div>
+                                <label className="field-label">Email</label>
+                                <input 
+                                    required 
+                                    type="email" 
+                                    value={accountFormData.email} 
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, email: e.target.value })} 
+                                    className="input text-sm" 
+                                    placeholder="inspector@example.com" 
+                                />
+                            </div>
+                            <div>
+                                <label className="field-label">Password</label>
+                                <input 
+                                    required 
+                                    type="password" 
+                                    value={accountFormData.password} 
+                                    onChange={(e) => setAccountFormData({ ...accountFormData, password: e.target.value })} 
+                                    className="input text-sm" 
+                                    placeholder="••••••••" 
+                                    minLength={6}
+                                />
+                            </div>
+                            
+                            <div className="flex justify-end gap-3 pt-4 border-t border-line mt-6">
+                                <button type="button" onClick={() => setIsAccountModalOpen(false)} className="btn btn-ghost text-sm">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={accountLoading} className="btn btn-primary text-sm min-w-24">
+                                    {accountLoading ? 'Creating...' : 'Create'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

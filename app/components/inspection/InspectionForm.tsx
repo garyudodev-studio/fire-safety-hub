@@ -42,7 +42,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [checklist, setChecklist] = useState<EquipmentChecklist | null>(null);
   const [answers, setAnswers] = useState<Record<string, 'YES' | 'NO'>>({});
   
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [equipmentPhotoUrl, setEquipmentPhotoUrl] = useState<string | null>(null);
+  const [checklistPhotoUrl, setChecklistPhotoUrl] = useState<string | null>(null);
   const [inspectorName, setInspectorName] = useState<string>('');
   const [inspectionDate, setInspectionDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -58,6 +59,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isLockedInspector, setIsLockedInspector] = useState(false);
 
   const supabase = getSupabaseClient();
 
@@ -105,9 +107,28 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         .select('id, name, phone, signature_url')
         .order('name', { ascending: true });
 
-      if (picsData && picsData.length > 0) {
+      // Fetch current user role and pic
+      const { data: sessionData } = await supabase.auth.getSession();
+      let lockedName = null;
+      if (sessionData?.session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, pic:pic_id(name)')
+          .eq('id', sessionData.session.user.id)
+          .single() as any; // Using any because nested join typing can be strict
+          
+        if (profile?.role === 'inspector' && profile.pic?.name) {
+          lockedName = profile.pic.name;
+          setIsLockedInspector(true);
+          setInspectorName(lockedName);
+        }
+      }
+
+      if (picsData && picsData.length > 0 && !lockedName) {
         setPicList(picsData as PicItem[]);
         setInspectorName(picsData[0].name); // default first PIC
+      } else if (picsData) {
+        setPicList(picsData as PicItem[]);
       }
 
       setFetchingData(false);
@@ -132,11 +153,13 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
       const cl = getChecklistForType(selectedEquipment.type);
       setChecklist(cl);
 
-      // Auto-select assigned PIC if available
-      if (selectedEquipment.pic_1?.name) {
-        setInspectorName(selectedEquipment.pic_1.name);
-      } else if (selectedEquipment.pic_2?.name) {
-        setInspectorName(selectedEquipment.pic_2.name);
+      // Auto-select assigned PIC if available and inspector is not locked
+      if (!isLockedInspector) {
+        if (selectedEquipment.pic_1?.name) {
+          setInspectorName(selectedEquipment.pic_1.name);
+        } else if (selectedEquipment.pic_2?.name) {
+          setInspectorName(selectedEquipment.pic_2.name);
+        }
       }
 
       // Reset answers to expected normal answer (YES or NO)
@@ -215,8 +238,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
       return;
     }
 
-    if (!photoDataUrl) {
-      setErrorMsg('Mandatory: Please take a live camera photo of the equipment.');
+    if (!equipmentPhotoUrl || !checklistPhotoUrl) {
+      setErrorMsg('Mandatory: Please take both a live camera photo of the equipment and the printed checklist form.');
       return;
     }
 
@@ -233,27 +256,35 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setLoading(true);
 
     try {
-      // 1. Upload photo to Supabase Storage `inspection_photos`
-      let uploadedPhotoUrl = photoDataUrl;
-
-      if (photoDataUrl.startsWith('data:image')) {
-        const response = await fetch(photoDataUrl);
+      // 1. Upload photos to Supabase Storage `inspection_photos`
+      let uploadedEquipmentPhotoUrl = equipmentPhotoUrl;
+      if (equipmentPhotoUrl.startsWith('data:image')) {
+        const response = await fetch(equipmentPhotoUrl);
         const blob = await response.blob();
-        const fileName = `inspection_${selectedEquipment.no_id}_${Date.now()}.jpg`;
-
+        const fileName = `inspection_eq_${selectedEquipment.no_id}_${Date.now()}.jpg`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('inspection_photos')
           .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-
-        if (uploadError) {
-          throw new Error(`Photo upload failed: ${uploadError.message}`);
-        }
-
+        if (uploadError) throw new Error(`Equipment photo upload failed: ${uploadError.message}`);
         const { data: publicUrlData } = supabase.storage
           .from('inspection_photos')
           .getPublicUrl(uploadData.path);
+        uploadedEquipmentPhotoUrl = publicUrlData.publicUrl;
+      }
 
-        uploadedPhotoUrl = publicUrlData.publicUrl;
+      let uploadedChecklistPhotoUrl = checklistPhotoUrl;
+      if (checklistPhotoUrl.startsWith('data:image')) {
+        const response = await fetch(checklistPhotoUrl);
+        const blob = await response.blob();
+        const fileName = `inspection_cl_${selectedEquipment.no_id}_${Date.now()}.jpg`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('inspection_photos')
+          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+        if (uploadError) throw new Error(`Checklist photo upload failed: ${uploadError.message}`);
+        const { data: publicUrlData } = supabase.storage
+          .from('inspection_photos')
+          .getPublicUrl(uploadData.path);
+        uploadedChecklistPhotoUrl = publicUrlData.publicUrl;
       }
 
       // 2. Insert record into `public.inspections` table
@@ -267,7 +298,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         month_year: monthYear,
         answers,
         status: computedStatus,
-        photo_url: uploadedPhotoUrl,
+        photo_url: `${uploadedEquipmentPhotoUrl},${uploadedChecklistPhotoUrl}`,
         remarks: remarks.trim() || null,
         action_taken: actionTaken.trim() || null,
       };
@@ -537,11 +568,22 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
             Equipment Photo Verification (Live Camera Only)
           </h3>
 
-          <CameraCapture
-            photoUrl={photoDataUrl}
-            onPhotoCaptured={(url) => setPhotoDataUrl(url)}
-            onPhotoCleared={() => setPhotoDataUrl(null)}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <CameraCapture
+              photoUrl={equipmentPhotoUrl}
+              onPhotoCaptured={(url) => setEquipmentPhotoUrl(url)}
+              onPhotoCleared={() => setEquipmentPhotoUrl(null)}
+              title="Equipment Unit Photo"
+              description="Photo must be taken live on-site with your device camera to ensure authenticity."
+            />
+            <CameraCapture
+              photoUrl={checklistPhotoUrl}
+              onPhotoCaptured={(url) => setChecklistPhotoUrl(url)}
+              onPhotoCleared={() => setChecklistPhotoUrl(null)}
+              title="Printed Checklist Form Photo"
+              description="Please capture a clear photo of the printed checklist form that you have filled out."
+            />
+          </div>
         </div>
       )}
 
@@ -564,6 +606,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                 onChange={(e) => setInspectorName(e.target.value)}
                 className="input"
                 required
+                disabled={isLockedInspector}
               >
                 <option value="" disabled>Select Inspector PIC...</option>
                 {picList.map((p) => (
@@ -572,6 +615,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                   </option>
                 ))}
               </select>
+              {isLockedInspector && (
+                <p className="text-[10px] text-ember-400 mt-1">
+                  Name is locked to your account.
+                </p>
+              )}
             </div>
 
             {/* Inspection Date */}
@@ -640,8 +688,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           </div>
 
           {/* Live Calculated Outcome */}
-          <div className="rounded-xl border border-line bg-ink-950/60 p-4 flex items-center justify-between">
-            <div>
+          <div className="rounded-xl border border-line bg-ink-950/60 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="w-full md:w-auto text-center md:text-left">
               <p className="text-xs font-semibold text-ink-400 uppercase tracking-wider">Calculated Result</p>
               <div className="flex items-center gap-2 mt-1">
                 {computedStatus === 'PASS' ? (
@@ -657,20 +705,20 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={loading}
-                className="btn btn-ghost text-xs"
+                className="btn btn-ghost text-xs w-full md:w-auto mb-2 md:mb-0"
               >
                 Cancel
               </button>
 
               <button
                 type="submit"
-                disabled={loading || !photoDataUrl}
-                className="btn btn-primary text-xs px-6 py-2.5 flex items-center gap-2"
+                disabled={loading || !equipmentPhotoUrl || !checklistPhotoUrl}
+                className="btn btn-primary text-xs px-6 py-2.5 flex items-center justify-center gap-2 w-full md:w-auto"
               >
                 {loading ? (
                   <>

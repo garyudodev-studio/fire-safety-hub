@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { useEffect } from 'react';
 
 const Icon = ({ children, size = 20 }: { children: React.ReactNode; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -15,6 +16,7 @@ const HomeIcon = () => <Icon><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-
 const UsersIcon = () => <Icon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 1 16 3.13A4 4 0 0 1 16 11" /></Icon>;
 const FileTextIcon = () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></Icon>;
 const LogOutIcon = () => <Icon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>;
+const BarChartIcon = () => <Icon><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Icon>;
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -23,16 +25,51 @@ export default function Sidebar() {
 
   const supabase = getSupabaseClient();
 
+  const [role, setRole] = useState<string>('admin');
+  const [userName, setUserName] = useState<string>('');
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userImage, setUserImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchRole = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserEmail(session.user.email || '');
+        const { data } = await supabase.from('profiles').select('role, pic:pic_id(name, image_profile)').eq('id', session.user.id).single() as any;
+        if (data?.role) {
+          setRole(data.role);
+          if (data.pic?.name) {
+            setUserName(data.pic.name);
+            if (data.pic.image_profile) {
+              setUserImage(data.pic.image_profile);
+            }
+          } else {
+            setUserName('Administrator');
+          }
+          if (data.role === 'inspector' && (pathname === '/dashboard' || pathname === '/dashboard/pics')) {
+            router.push('/dashboard/inspections');
+          }
+        }
+      }
+    };
+    fetchRole();
+  }, [pathname]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
   };
 
-  const navItems = [
+  let navItems = [
     { name: 'Masterlist', href: '/dashboard', icon: <HomeIcon /> },
     { name: 'Inspections', href: '/dashboard/inspections', icon: <FileTextIcon /> },
+    { name: 'Reports', href: '/dashboard/reports', icon: <BarChartIcon /> },
     { name: 'Manage PICs', href: '/dashboard/pics', icon: <UsersIcon /> },
   ];
+
+  if (role === 'inspector') {
+    navItems = navItems.filter(item => item.name === 'Inspections' || item.name === 'Reports');
+  }
 
   return (
     <>
@@ -98,13 +135,17 @@ export default function Sidebar() {
         <div className="p-3 border-t border-line space-y-3">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-ink-800 border border-line flex items-center justify-center text-ink-400 shrink-0">
-                <UsersIcon />
+              <div className="w-9 h-9 rounded-full bg-ink-800 border border-line flex items-center justify-center text-ink-400 shrink-0 overflow-hidden">
+                {userImage ? (
+                  <img src={userImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <UsersIcon />
+                )}
               </div>
               {!isCollapsed && (
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-medium text-ink-200 truncate">Admin User</span>
-                  <span className="text-[11px] text-ink-500 truncate">Workspace Admin</span>
+                  <span className="text-sm font-medium text-ink-200 truncate">{userName || userEmail || 'Loading...'}</span>
+                  <span className="text-[11px] text-ink-500 truncate capitalize">{role} {role === 'admin' ? 'User' : ''}</span>
                 </div>
               )}
             </div>

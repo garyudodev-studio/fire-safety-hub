@@ -6,9 +6,11 @@ interface CameraCaptureProps {
   photoUrl: string | null;
   onPhotoCaptured: (dataUrl: string) => void;
   onPhotoCleared: () => void;
+  title?: string;
+  description?: string;
 }
 
-export default function CameraCapture({ photoUrl, onPhotoCaptured, onPhotoCleared }: CameraCaptureProps) {
+export default function CameraCapture({ photoUrl, onPhotoCaptured, onPhotoCleared, title = 'Equipment Photo Verification (Live Camera Only)', description = 'Photo must be taken live on-site with your device camera to ensure authenticity and prevent fraud.' }: CameraCaptureProps) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -72,13 +74,37 @@ export default function CameraCapture({ photoUrl, onPhotoCaptured, onPhotoCleare
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    const MAX_DIM = 1280;
+    let width = video.videoWidth || 640;
+    let height = video.videoHeight || 480;
+
+    if (width > MAX_DIM || height > MAX_DIM) {
+      if (width > height) {
+        height = Math.round((height * MAX_DIM) / width);
+        width = MAX_DIM;
+      } else {
+        width = Math.round((width * MAX_DIM) / height);
+        height = MAX_DIM;
+      }
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
     
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      ctx.drawImage(video, 0, 0, width, height);
+
+      // Add timestamp
+      const timestamp = new Date().toLocaleString();
+      ctx.font = '16px sans-serif';
+      const textWidth = ctx.measureText(timestamp).width;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(10, height - 40, textWidth + 20, 30);
+      ctx.fillStyle = 'white';
+      ctx.fillText(timestamp, 20, height - 20);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       onPhotoCaptured(dataUrl);
       stopCamera();
     }
@@ -113,13 +139,13 @@ export default function CameraCapture({ photoUrl, onPhotoCaptured, onPhotoCleare
       <div className="flex items-center justify-between">
         <div>
           <label className="field-label text-ink-200 text-sm font-semibold flex items-center gap-2">
-            Equipment Photo Verification (Live Camera Only)
+            {title}
             <span className="text-xs font-normal text-rose-400 bg-rose-950/60 border border-rose-900/60 px-2.5 py-0.5 rounded-full">
               Live Capture Required
             </span>
           </label>
           <p className="text-xs text-ink-400">
-            Photo must be taken live on-site with your device camera to ensure authenticity and prevent fraud.
+            {description}
           </p>
         </div>
 

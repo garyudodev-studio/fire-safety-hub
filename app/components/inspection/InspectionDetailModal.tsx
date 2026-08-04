@@ -120,17 +120,23 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
 
           {/* Photo, Remarks & Inspector Digital Signature */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Equipment Photo */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider">Equipment Verification Photo (Live Captured)</h4>
-              <div className="rounded-2xl overflow-hidden border border-line bg-black aspect-video flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={inspection.photo_url}
-                  alt={`Photo for ${inspection.equipment_no_id}`}
-                  className="w-full h-full object-contain"
-                />
-              </div>
+            {/* Equipment & Checklist Photos */}
+            <div className="space-y-4">
+              {inspection.photo_url.split(',').map((url, idx) => (
+                <div key={idx} className="space-y-2">
+                  <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider">
+                    {idx === 0 ? 'Equipment Verification Photo (Live Captured)' : 'Printed Checklist Form Photo'}
+                  </h4>
+                  <div className="rounded-2xl overflow-hidden border border-line bg-black aspect-video flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url.trim()}
+                      alt={`Photo ${idx + 1} for ${inspection.equipment_no_id}`}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Remarks, Actions & Digital Signature */}

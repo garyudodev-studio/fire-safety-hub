@@ -34,13 +34,30 @@ export default function LandingPage() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-
+    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
+    
     if (error) {
       setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (authData.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+      
+      setLoading(false);
+      
+      if (profile?.role === 'inspector') {
+        router.push('/dashboard/inspections');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
-      router.push('/dashboard');
+      setLoading(false);
     }
   };
 

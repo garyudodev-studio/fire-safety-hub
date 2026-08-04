@@ -88,6 +88,7 @@ export default function AdminDashboard() {
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
     // Filter state
+    const [searchQuery, setSearchQuery] = useState('');
     const [filterEntity, setFilterEntity] = useState('');
     const [filterFacility, setFilterFacility] = useState('');
     const [filterType, setFilterType] = useState('');
@@ -154,6 +155,13 @@ export default function AdminDashboard() {
 
     // --- Filtered data ---
     const filteredEquipment = equipment.filter(item => {
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const idMatch = item.no_id?.toLowerCase().includes(q);
+            const pic1Match = item.pic_1?.name?.toLowerCase().includes(q);
+            const pic2Match = item.pic_2?.name?.toLowerCase().includes(q);
+            if (!idMatch && !pic1Match && !pic2Match) return false;
+        }
         if (filterEntity && item.entity !== filterEntity) return false;
         if (filterFacility && item.facility !== filterFacility) return false;
         if (filterType && item.type !== filterType) return false;
@@ -166,7 +174,7 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterEntity, filterFacility, filterType, filterArea]);
+    }, [searchQuery, filterEntity, filterFacility, filterType, filterArea]);
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
@@ -262,7 +270,17 @@ export default function AdminDashboard() {
 
     const uploadPhotoToStorage = async (file: File, id: string, slot: 'pic_1_photo' | 'pic_2_photo') => {
         const ext = file.name.split('.').pop();
-        const path = `${id}/${slot}.${ext}`;
+        const path = `${id}/${slot}_${Date.now()}.${ext}`; // add timestamp to avoid caching issues
+
+        // Check for existing photo and delete it
+        const { data: oldEq } = await supabase.from('equipment').select(slot).eq('id', id).single();
+        if (oldEq && (oldEq as any)[slot]) {
+            const oldUrl = (oldEq as any)[slot] as string;
+            const oldFilename = oldUrl.split('/').pop();
+            if (oldFilename) {
+                await supabase.storage.from('equipment_photos').remove([`${id}/${oldFilename}`]);
+            }
+        }
 
         // Upload to Supabase Storage bucket named 'equipment_photos'
         const { data, error } = await supabase.storage
@@ -654,8 +672,8 @@ export default function AdminDashboard() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        <Link href="/dashboard/pics" className="btn btn-ghost">
+                    <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto mt-4 md:mt-0">
+                        <Link href="/dashboard/pics" className="btn btn-ghost w-full sm:w-auto justify-center">
                             <UsersIcon /> Manage PICs
                         </Link>
                         <button onClick={handleExport} className="btn btn-soft">
@@ -668,10 +686,10 @@ export default function AdminDashboard() {
                         <button onClick={triggerFileInput} disabled={isImporting} className="btn btn-soft disabled:opacity-50">
                             <ImportIcon /> {isImporting ? 'Importing…' : 'Import'}
                         </button>
-                        <button onClick={openCreateSheet} className="btn btn-primary">
+                        <button onClick={openCreateSheet} className="btn btn-primary w-full sm:w-auto justify-center">
                             <PlusIcon /> Add Equipment
                         </button>
-                        <button onClick={handleSignOut} className="btn btn-ghost" title="Sign out">
+                        <button onClick={handleSignOut} className="btn btn-ghost w-full sm:w-auto justify-center" title="Sign out">
                             Sign out
                         </button>
                     </div>
@@ -679,14 +697,26 @@ export default function AdminDashboard() {
 
                 {/* Filter Bar + View Toggle */}
                 <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center">
-                    <div className="flex flex-1 flex-wrap items-center gap-3">
+                    <div className="flex flex-1 flex-col md:flex-row flex-wrap items-start md:items-center gap-3">
+                        <div className="relative w-full md:w-auto">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500">
+                                <SearchIcon />
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Search by ID or PIC..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="input pl-10 min-w-full md:min-w-[200px]"
+                            />
+                        </div>
                         {[
                             { value: filterEntity, set: setFilterEntity, label: 'All Entities', options: uniqueEntities },
                             { value: filterFacility, set: setFilterFacility, label: 'All Facilities', options: uniqueFacilities },
                             { value: filterType, set: setFilterType, label: 'All Types', options: uniqueTypes },
                             { value: filterArea, set: setFilterArea, label: 'All Areas', options: uniqueAreas },
                         ].map((f, i) => (
-                            <div key={i} className="relative">
+                            <div key={i} className="relative w-full md:w-auto">
                                 <select
                                     value={f.value}
                                     onChange={e => f.set(e.target.value)}
@@ -703,8 +733,8 @@ export default function AdminDashboard() {
 
                         {activeFiltersCount > 0 && (
                             <button
-                                onClick={() => { setFilterEntity(''); setFilterFacility(''); setFilterType(''); setFilterArea(''); }}
-                                className="btn btn-ghost px-3 py-2.5 text-xs"
+                                onClick={() => { setFilterEntity(''); setFilterFacility(''); setFilterType(''); setFilterArea(''); setSearchQuery(''); }}
+                                className="btn btn-ghost px-3 py-2.5 text-xs w-full md:w-auto justify-center"
                             >
                                 Clear
                                 <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-ink-300">{activeFiltersCount}</span>
@@ -720,22 +750,22 @@ export default function AdminDashboard() {
                             </button>
                         )}
 
-                        <span className="ml-auto text-sm text-ink-500">
+                        <span className="ml-auto text-sm text-ink-500 w-full md:w-auto text-right">
                             {filteredEquipment.length} <span className="text-ink-600">/</span> {equipment.length} items
                         </span>
                     </div>
 
                     {/* View Mode Toggle */}
-                    <div className="flex gap-1 rounded-xl border border-line bg-ink-900 p-1">
+                    <div className="flex gap-1 rounded-xl border border-line bg-ink-900 p-1 w-full md:w-auto">
                         <button
                             onClick={() => setViewMode('grid')}
-                            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                            className={`flex items-center justify-center flex-1 md:flex-none gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
                         >
                             <GridIcon /> Grid
                         </button>
                         <button
                             onClick={() => setViewMode('list')}
-                            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                            className={`flex items-center justify-center flex-1 md:flex-none gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
                         >
                             <ListIcon /> List
                         </button>
