@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
-import { useEffect } from 'react';
 
 const Icon = ({ children, size = 20 }: { children: React.ReactNode; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -13,10 +12,64 @@ const Icon = ({ children, size = 20 }: { children: React.ReactNode; size?: numbe
 );
 
 const HomeIcon = () => <Icon><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>;
-const UsersIcon = () => <Icon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 1 16 3.13A4 4 0 0 1 16 11" /></Icon>;
 const FileTextIcon = () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></Icon>;
 const LogOutIcon = () => <Icon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>;
-const BarChartIcon = () => <Icon><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></Icon>;
+const BarChartIcon = () => <Icon><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></Icon>;
+const UsersIcon = () => <Icon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 1-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Icon>;
+
+/** Returns initials (max 2 chars) from a display name */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Consistent hue from a string for the avatar background */
+function nameHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
+/** Avatar circle — photo, initials, or fallback icon */
+function UserAvatar({
+  imageUrl,
+  name,
+  size = 'md',
+}: {
+  imageUrl: string | null;
+  name: string;
+  size?: 'sm' | 'md';
+}) {
+  const dim = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs';
+  if (imageUrl) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={imageUrl}
+        alt="Profile"
+        className={`${dim} rounded-full object-cover border border-line shrink-0`}
+      />
+    );
+  }
+  if (name && name !== 'Administrator') {
+    const hue = nameHue(name);
+    return (
+      <span
+        className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border border-white/10`}
+        style={{ background: `hsl(${hue} 40% 22%)`, color: `hsl(${hue} 60% 72%)` }}
+      >
+        {getInitials(name)}
+      </span>
+    );
+  }
+  return (
+    <span className={`${dim} rounded-full bg-ink-800 border border-line flex items-center justify-center text-ink-400 shrink-0`}>
+      <UsersIcon />
+    </span>
+  );
+}
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -71,10 +124,13 @@ export default function Sidebar() {
     navItems = navItems.filter(item => item.name === 'Inspections' || item.name === 'Reports');
   }
 
+  const displayName = userName || userEmail || 'Loading...';
+
   return (
     <>
-      {/* Desktop Sidebar */}
+      {/* ── Desktop Sidebar ── */}
       <aside className={`hidden md:flex flex-col bg-ink-950 border-r border-line h-screen sticky top-0 shrink-0 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
+        {/* Logo row */}
         <div className={`h-16 flex items-center border-b border-line ${isCollapsed ? 'justify-center px-2' : 'justify-between px-6'}`}>
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ember-600/15 text-ember-400 border border-ember-900/50 shrink-0">
@@ -100,14 +156,15 @@ export default function Sidebar() {
             </svg>
           </button>
         </div>
-        
+
+        {/* Nav items */}
         <div className="flex-1 overflow-y-auto py-6 px-3 flex flex-col gap-2">
           {!isCollapsed && (
             <div className="px-2 mb-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">Menu</p>
             </div>
           )}
-          
+
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
             return (
@@ -118,8 +175,8 @@ export default function Sidebar() {
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                   isCollapsed ? 'justify-center' : ''
                 } ${
-                  isActive 
-                    ? 'bg-ink-800 text-ember-400 font-medium border border-line shadow-sm' 
+                  isActive
+                    ? 'bg-ink-800 text-ember-400 font-medium border border-line shadow-sm'
                     : 'text-ink-400 hover:bg-ink-800/50 hover:text-ink-200 border border-transparent'
                 }`}
               >
@@ -131,26 +188,23 @@ export default function Sidebar() {
             );
           })}
         </div>
-        
-        <div className="p-3 border-t border-line space-y-3">
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-ink-800 border border-line flex items-center justify-center text-ink-400 shrink-0 overflow-hidden">
-                {userImage ? (
-                  <img src={userImage} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <UsersIcon />
-                )}
+
+        {/* ── Bottom user block + sign out ── */}
+        <div className="p-3 border-t border-line space-y-2">
+          {/* User info card */}
+          <div className={`flex items-center gap-3 px-2 py-2 rounded-xl bg-ink-900/60 border border-line/50 ${isCollapsed ? 'justify-center' : ''}`}>
+            <UserAvatar imageUrl={userImage} name={userName} size="md" />
+            {!isCollapsed && (
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium text-ink-200 truncate">{displayName}</span>
+                <span className="text-[11px] text-ink-500 truncate capitalize">
+                  {role === 'admin' ? 'Admin User' : role}
+                </span>
               </div>
-              {!isCollapsed && (
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-medium text-ink-200 truncate">{userName || userEmail || 'Loading...'}</span>
-                  <span className="text-[11px] text-ink-500 truncate capitalize">{role} {role === 'admin' ? 'User' : ''}</span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
+          {/* Sign out button */}
           <button
             onClick={handleSignOut}
             title={isCollapsed ? 'Sign Out' : undefined}
@@ -164,7 +218,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile Bottom Navigation */}
+      {/* ── Mobile Bottom Navigation ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ink-950/95 backdrop-blur-xl border-t border-line px-2 py-1.5 flex items-center justify-around shadow-2xl">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -186,6 +240,7 @@ export default function Sidebar() {
           );
         })}
 
+        {/* Mobile user / sign out */}
         <button
           onClick={handleSignOut}
           className="flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-rose-400 hover:text-rose-300 transition-all"
