@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
@@ -47,12 +47,12 @@ const EQUIPMENT_TYPES = [
 
 const PAGE_SIZE = 13;
 
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
-}
-function firstOfMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+function formatMonthYear(monthYear: string): string {
+  const [mm, yyyy] = monthYear.split('/');
+  const monthNum = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
+  return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -111,23 +111,16 @@ function PassRateRing({ rate }: { rate: number }) {
 function TypeBreakdown({
   inspections,
   masterlist,
-  dateFrom,
-  dateTo,
+  periodText,
 }: {
   inspections: InspectionRecord[];
   masterlist: EquipmentMaster[];
-  dateFrom?: string;
-  dateTo?: string;
+  periodText: string;
 }) {
   const totalMasterlistAll = masterlist.length;
   const uniqueAllInspected = new Set(inspections.map((i) => i.equipment_no_id)).size;
   const overallPending = Math.max(0, totalMasterlistAll - uniqueAllInspected);
   const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueAllInspected / totalMasterlistAll) * 100) : 0;
-
-  const datePeriodText =
-    dateFrom || dateTo
-      ? `${dateFrom || 'Start'} to ${dateTo || 'Today'}`
-      : 'All Recorded Dates';
 
   const rows = EQUIPMENT_TYPES.map((t) => {
     const totalEquip  = masterlist.filter((e) => e.type === t).length;
@@ -158,7 +151,7 @@ function TypeBreakdown({
           <h3 className="text-xs font-bold uppercase tracking-wider text-ink-200 flex items-center gap-2">
             Equipment Coverage Breakdown
             <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60 font-mono">
-              📅 Period: {datePeriodText}
+              📅 Period: {periodText}
             </span>
           </h3>
           <p className="text-xs text-ink-400 mt-1">
@@ -253,7 +246,7 @@ function TypeBreakdown({
             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
           <div>
-            <p className="font-bold">Inspection Period Incomplete ({datePeriodText})</p>
+            <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
             <p className="mt-0.5 text-amber-300/80">
               <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
               Ensure all equipment items receive inspection.
@@ -329,13 +322,14 @@ export default function ReportsPage() {
   const [selectedType,     setSelectedType]     = useState('All');
   const [selectedEntity,   setSelectedEntity]   = useState('All');
   const [selectedFacility, setSelectedFacility] = useState('All');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo,   setDateTo]   = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(''); // "MM/YYYY" from inspection data
+  const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   // Tab & pagination
   const [activeTab,   setActiveTab]   = useState<TabKey>('unsafe');
   const [unsafePage,  setUnsafePage]  = useState(1);
   const [safePage,    setSafePage]    = useState(1);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   // ── Derived filter options from masterlist ──
   const uniqueEntities   = useMemo(() => ['All', ...Array.from(new Set(masterlist.map(e => e.entity).filter(Boolean) as string[])).sort()], [masterlist]);
@@ -344,43 +338,55 @@ export default function ReportsPage() {
     return ['All', ...Array.from(new Set(base.map(e => e.facility).filter(Boolean) as string[])).sort()];
   }, [masterlist, selectedEntity]);
 
+  // ── Period options derived from inspection data ──
+  const monthOptions = useMemo(() => {
+    return Array.from(new Set(inspections.map((i) => i.month_year).filter(Boolean))).sort().reverse();
+  }, [inspections]);
+
+  const weekOptions = useMemo(() => {
+    const base = inspections.filter((i) => i.month_year === selectedMonth);
+    return Array.from(new Set(base.map((i) => i.week).filter(Boolean))).sort();
+  }, [inspections, selectedMonth]);
+
   // ── Fetch ──
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) { router.push('/'); return; }
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) { router.push('/'); return; }
 
-    const [inspRes, masterRes, profileRes] = await Promise.all([
-      supabase
-        .from('inspections')
-        .select(`*, equipment:equipment_id(location, facility, area, entity)`)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('equipment')
-        .select('id, no_id, type, entity, facility, area'),
-      supabase
-        .from('profiles')
-        .select('role, entity, facility, pic:pic_id(entity, facility)')
-        .eq('id', sessionData.session.user.id)
-        .single()
-    ]);
+      const [inspRes, masterRes, profileRes] = await Promise.all([
+        supabase
+          .from('inspections')
+          .select(`*, equipment:equipment_id(location, facility, area, entity)`)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('equipment')
+          .select('id, no_id, type, entity, facility, area'),
+        supabase
+          .from('profiles')
+          .select('role, entity, facility, pic:pic_id(entity, facility)')
+          .eq('id', sessionData.session.user.id)
+          .single()
+      ]);
 
-    if (!inspRes.error   && inspRes.data)   setInspections(inspRes.data as InspectionRecord[]);
-    if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
+      if (!inspRes.error   && inspRes.data)   setInspections(inspRes.data as InspectionRecord[]);
+      if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
 
-    if (profileRes.data) {
-      const userProfile = profileRes.data;
-      const assignedEntity = userProfile.entity || (userProfile.pic as any)?.entity;
-      const assignedFacility = userProfile.facility || (userProfile.pic as any)?.facility;
-      if (assignedEntity) setSelectedEntity(assignedEntity);
-      if (assignedFacility) setSelectedFacility(assignedFacility);
-    }
+      if (profileRes.data) {
+        const userProfile = profileRes.data;
+        const assignedEntity = userProfile.entity || userProfile.pic?.entity;
+        const assignedFacility = userProfile.facility || userProfile.pic?.facility;
+        if (assignedEntity) setSelectedEntity(assignedEntity);
+        if (assignedFacility) setSelectedFacility(assignedFacility);
+      }
 
-    setLastFetched(new Date());
-    setLoading(false);
-  }, [router, supabase]);
+      setLastFetched(new Date());
+      setLoading(false);
+    };
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    fetchData();
+  }, [supabase, router, reloadTrigger]);
 
   // ── Apply filters to inspections ──
   const filteredInspections = useMemo(() => {
@@ -392,18 +398,17 @@ export default function ReportsPage() {
 
       const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
       // Entity and facility come from the joined equipment relation
-      const entity   = (item.equipment as any)?.entity   ?? '';
-      const facility = (item.equipment as any)?.facility ?? '';
+      const entity   = item.equipment?.entity   ?? '';
+      const facility = item.equipment?.facility ?? '';
       const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
 
-      const itemDate  = item.inspection_date;
-      const matchFrom = !dateFrom || itemDate >= dateFrom;
-      const matchTo   = !dateTo   || itemDate <= dateTo;
+      const matchMonth = !selectedMonth || item.month_year === selectedMonth;
+      const matchWeek  = !selectedWeek  || item.week === selectedWeek;
 
-      return matchSearch && matchType && matchEntity && matchFacility && matchFrom && matchTo;
+      return matchSearch && matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
-  }, [inspections, searchQuery, selectedType, selectedEntity, selectedFacility, dateFrom, dateTo]);
+  }, [inspections, searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // ── Apply same entity/facility/type filter to masterlist for coverage numbers ──
   const filteredMasterlist = useMemo(() => {
@@ -430,16 +435,43 @@ export default function ReportsPage() {
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
   // Reset pages when filters change
-  useEffect(() => { setUnsafePage(1); setSafePage(1); }, [searchQuery, selectedType, selectedEntity, selectedFacility, dateFrom, dateTo]);
+  const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
+  const [prevFilterSignature, setPrevFilterSignature] = useState(filterSignature);
+  if (prevFilterSignature !== filterSignature) {
+    setPrevFilterSignature(filterSignature);
+    setUnsafePage(1);
+    setSafePage(1);
+  }
   // Reset facility when entity changes
-  useEffect(() => { setSelectedFacility('All'); }, [selectedEntity]);
+  const [prevEntity, setPrevEntity] = useState(selectedEntity);
+  if (prevEntity !== selectedEntity) {
+    setPrevEntity(selectedEntity);
+    setSelectedFacility('All');
+  }
+  // Reset week when month changes
+  const [prevMonth, setPrevMonth] = useState(selectedMonth);
+  if (prevMonth !== selectedMonth) {
+    setPrevMonth(selectedMonth);
+    setSelectedWeek('');
+  }
 
   // ── Pagination slices ──
   const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
   const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
 
-  const setThisMonth = () => { setDateFrom(firstOfMonthStr()); setDateTo(todayStr()); };
-  const clearDates   = () => { setDateFrom(''); setDateTo(''); };
+  const setThisMonth = () => {
+    const now = new Date();
+    setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    setSelectedWeek('');
+  };
+  const clearDates = () => {
+    setSelectedMonth('');
+    setSelectedWeek('');
+  };
+
+  const periodText = selectedMonth
+    ? `${formatMonthYear(selectedMonth)}${selectedWeek ? `, ${selectedWeek}` : ''}`
+    : 'All Recorded Dates';
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -478,8 +510,8 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {rows.map((item) => {
-                    const entity   = (item.equipment as any)?.entity   ?? '';
-                    const facility = (item.equipment as any)?.facility ?? '';
+                    const entity   = item.equipment?.entity   ?? '';
+                    const facility = item.equipment?.facility ?? '';
                     return (
                       <tr
                         key={item.id}
@@ -554,7 +586,7 @@ export default function ReportsPage() {
                   </span>
                 )}
                 <button
-                  onClick={fetchData} disabled={loading}
+                  onClick={() => { setLoading(true); setReloadTrigger((t) => t + 1); }} disabled={loading}
                   className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-2"
                   title="Refresh data"
                 >
@@ -604,23 +636,38 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Filter row 2: dates */}
+            {/* Filter row 2: period (month then week) */}
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="field-label text-[10px]">From</label>
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-xs w-36" />
+                <label className="field-label text-[10px]">Month</label>
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-40">
+                  <option value="">All Months</option>
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>{formatMonthYear(m)}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="field-label text-[10px]">To</label>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-xs w-36" />
+                <label className="field-label text-[10px]">Week</label>
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  disabled={!selectedMonth}
+                  className="input text-xs w-36"
+                >
+                  <option value="">All Weeks</option>
+                  {weekOptions.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex gap-2 pb-0.5">
                 <button onClick={setThisMonth} className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">
                   This Month
                 </button>
-                {(dateFrom || dateTo) && (
+                {(selectedMonth || selectedWeek) && (
                   <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
-                    Clear Dates
+                    Clear
                   </button>
                 )}
               </div>
@@ -646,8 +693,7 @@ export default function ReportsPage() {
           <TypeBreakdown
             inspections={filteredInspections}
             masterlist={filteredMasterlist}
-            dateFrom={dateFrom}
-            dateTo={dateTo}
+            periodText={periodText}
           />
 
           {/* ── Tabbed Table ── */}

@@ -4,7 +4,11 @@ import { createBrowserClient } from '@supabase/ssr';
 const DUMMY_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.placeholder';
 
+let cachedClient: ReturnType<typeof createBrowserClient> | null = null;
+
 export function getSupabaseClient() {
+  if (cachedClient) return cachedClient;
+
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
@@ -15,7 +19,8 @@ export function getSupabaseClient() {
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     DUMMY_ANON_KEY;
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  cachedClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return cachedClient;
 }
 
 

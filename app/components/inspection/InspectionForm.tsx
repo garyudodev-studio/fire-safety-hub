@@ -49,10 +49,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     new Date().toISOString().split('T')[0]
   );
   
-  // Auto calculated Week and Month/Year states
-  const [week, setWeek] = useState<string>('Week 1');
-  const [monthYear, setMonthYear] = useState<string>('');
-  
+  // Auto calculated Week and Month/Year derived from Inspection Date
+  const dateParts = inspectionDate.split('-');
+  const week = dateParts.length === 3 ? `Week ${Math.min(4, Math.ceil(parseInt(dateParts[2], 10) / 7))}` : 'Week 1';
+  const monthYear = dateParts.length === 3 ? `${dateParts[1]}/${dateParts[0]}` : '';
+
   const [remarks, setRemarks] = useState('');
   const [actionTaken, setActionTaken] = useState('');
 
@@ -62,27 +63,6 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [isLockedInspector, setIsLockedInspector] = useState(false);
 
   const supabase = getSupabaseClient();
-
-  // Auto calculate Week and Month/Year whenever Inspection Date changes
-  const updateWeekAndMonthYear = (dateStr: string) => {
-    if (!dateStr) return;
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      const year = parts[0];
-      const month = parts[1];
-      const day = parseInt(parts[2], 10);
-      
-      const calculatedWeek = `Week ${Math.min(4, Math.ceil(day / 7))}`;
-      const calculatedMonthYear = `${month}/${year}`;
-      
-      setWeek(calculatedWeek);
-      setMonthYear(calculatedMonthYear);
-    }
-  };
-
-  useEffect(() => {
-    updateWeekAndMonthYear(inspectionDate);
-  }, [inspectionDate]);
 
   // Scroll to top of modal container whenever component mounts or selected equipment changes
   useEffect(() => {
@@ -122,7 +102,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           .from('profiles')
           .select('role, pic:pic_id(name)')
           .eq('id', sessionData.session.user.id)
-          .single() as any; // Using any because nested join typing can be strict
+          .single();
           
         if (profile?.role === 'inspector' && profile.pic?.name) {
           lockedName = profile.pic.name;
@@ -142,7 +122,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     };
 
     loadData();
-  }, []);
+  }, [supabase]);
 
   // Unique list of facilities/factories for filter dropdown
   const uniqueFacilities = Array.from(
@@ -154,34 +134,36 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     new Set(masterlist.map((e) => e.type).filter(Boolean))
   ).sort();
 
-  // Update checklist and preselect inspector when equipment is selected
-  useEffect(() => {
-    if (selectedEquipment) {
-      const cl = getChecklistForType(selectedEquipment.type);
-      setChecklist(cl);
+  const applyEquipmentSelection = (item: EquipmentItem | null) => {
+    setSelectedEquipment(item);
 
-      // Auto-select assigned PIC if available and inspector is not locked
-      if (!isLockedInspector) {
-        if (selectedEquipment.pic_1?.name) {
-          setInspectorName(selectedEquipment.pic_1.name);
-        } else if (selectedEquipment.pic_2?.name) {
-          setInspectorName(selectedEquipment.pic_2.name);
-        }
-      }
-
-      // Reset answers to expected normal answer (YES or NO)
-      const initialAnswers: Record<string, 'YES' | 'NO'> = {};
-      cl.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          initialAnswers[item.id] = item.expectedAnswer || 'YES';
-        });
-      });
-      setAnswers(initialAnswers);
-    } else {
+    if (!item) {
       setChecklist(null);
       setAnswers({});
+      return;
     }
-  }, [selectedEquipment]);
+
+    const cl = getChecklistForType(item.type);
+    setChecklist(cl);
+
+    // Auto-select assigned PIC if available and inspector is not locked
+    if (!isLockedInspector) {
+      if (item.pic_1?.name) {
+        setInspectorName(item.pic_1.name);
+      } else if (item.pic_2?.name) {
+        setInspectorName(item.pic_2.name);
+      }
+    }
+
+    // Reset answers to expected normal answer (YES or NO)
+    const initialAnswers: Record<string, 'YES' | 'NO'> = {};
+    cl.sections.forEach((section) => {
+      section.items.forEach((checklistItem) => {
+        initialAnswers[checklistItem.id] = checklistItem.expectedAnswer || 'YES';
+      });
+    });
+    setAnswers(initialAnswers);
+  };
 
   // Filter equipment based on Facility, Type, and Search Query
   const filteredEquipment = masterlist.filter((item) => {
@@ -200,7 +182,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   });
 
   const handleSelectEquipment = (item: EquipmentItem) => {
-    setSelectedEquipment(item);
+    applyEquipmentSelection(item);
     setSearchQuery('');
   };
 
@@ -352,7 +334,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           {selectedEquipment && (
             <button
               type="button"
-              onClick={() => setSelectedEquipment(null)}
+              onClick={() => applyEquipmentSelection(null)}
               className="text-xs text-ember-400 hover:text-ember-300 underline"
             >
               Change Selection

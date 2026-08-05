@@ -93,7 +93,7 @@ export default function Sidebar() {
           .from('profiles')
           .select('role, entity, facility, pic:pic_id(name, image_profile, entity, facility)')
           .eq('id', session.user.id)
-          .single() as any;
+          .single();
 
         if (data?.role) {
           setRole(data.role);
@@ -118,7 +118,7 @@ export default function Sidebar() {
       }
     };
     fetchRole();
-  }, [pathname]);
+  }, [pathname, router, supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

@@ -22,17 +22,12 @@ export default function CameraCapture({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isSnapping, setIsSnapping] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const startCamera = async () => {
+  const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
     setCameraError(null);
     try {
       if (streamRef.current) {
@@ -41,7 +36,7 @@ export default function CameraCapture({
 
       const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: { ideal: facingMode },
+          facingMode: { ideal: mode },
           width: { ideal: 1280 },
           height: { ideal: 1280 },
           aspectRatio: { ideal: 1 },
@@ -76,17 +71,9 @@ export default function CameraCapture({
   };
 
   useEffect(() => {
-    if (isCameraActive) {
-      startCamera();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facingMode]);
-
-  useEffect(() => {
     return () => {
       stopCamera();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Center-crop to 1:1 square from the video frame
@@ -131,8 +118,10 @@ export default function CameraCapture({
     }, 80);
   };
 
-  const switchCamera = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  const switchCamera = async () => {
+    const next = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(next);
+    await startCamera(next);
   };
 
   const setVideoRef = (node: HTMLVideoElement | null) => {
@@ -302,7 +291,7 @@ export default function CameraCapture({
             <div className="absolute inset-0 bg-ink-950/75 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <button
                 type="button"
-                onClick={startCamera}
+                onClick={() => startCamera()}
                 className="btn btn-primary text-xs flex items-center gap-2 px-5 py-2.5 shadow-lg"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -338,7 +327,7 @@ export default function CameraCapture({
 
             <button
               type="button"
-              onClick={startCamera}
+              onClick={() => startCamera()}
               className="btn btn-primary text-xs flex items-center gap-2 px-5 py-2.5 shadow-lg shadow-ember-950/40"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -352,7 +341,7 @@ export default function CameraCapture({
       </div>
 
       {/* ─── FULLSCREEN MODAL OVERLAY PORTAL FOR LIVE CAMERA MODE ─── */}
-      {isCameraActive && isMounted && createPortal(cameraModalJSX, document.body)}
+      {isCameraActive && typeof document !== 'undefined' && createPortal(cameraModalJSX, document.body)}
     </>
   );
 }

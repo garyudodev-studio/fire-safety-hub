@@ -24,6 +24,7 @@ export interface InspectionRecord {
     facility?: string;
     area?: string;
     area_2?: string;
+    entity?: string;
   } | null;
 }
 
@@ -41,12 +42,16 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
 
   const supabase = getSupabaseClient();
 
-  useEffect(() => {
-    if (!inspection?.inspector_name) {
-      setInspectorSignature(null);
-      return;
-    }
+  const [prevInspectorName, setPrevInspectorName] = useState<string | undefined>(inspection?.inspector_name);
+  if (prevInspectorName !== inspection?.inspector_name) {
+    setPrevInspectorName(inspection?.inspector_name);
+    setInspectorSignature(null);
+  }
 
+  useEffect(() => {
+    if (!inspection?.inspector_name) return;
+
+    let cancelled = false;
     const fetchSignature = async () => {
       const { data } = await supabase
         .from('pic')
@@ -54,15 +59,16 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
         .eq('name', inspection.inspector_name)
         .single();
 
-      if (data?.signature_url) {
-        setInspectorSignature(data.signature_url);
-      } else {
-        setInspectorSignature(null);
+      if (!cancelled) {
+        setInspectorSignature(data?.signature_url || null);
       }
     };
 
     fetchSignature();
-  }, [inspection]);
+    return () => {
+      cancelled = true;
+    };
+  }, [inspection, supabase]);
 
   if (!inspection) return null;
 

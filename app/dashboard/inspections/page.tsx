@@ -20,6 +20,14 @@ function getTypeBadgeColor(type: string): string {
   }
 }
 
+function formatMonthYear(monthYear: string): string {
+  const [mm, yyyy] = monthYear.split('/');
+  const monthNum = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
+  return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
+}
+
 export default function InspectionsPage() {
   const router = useRouter();
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
@@ -31,51 +39,53 @@ export default function InspectionsPage() {
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedEntity, setSelectedEntity] = useState('All');
   const [selectedFacility, setSelectedFacility] = useState('All');
+  const [selectedMonth, setSelectedMonth] = useState(''); // "MM/YYYY" from inspection data
+  const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
 
   const supabase = getSupabaseClient();
-
-  const checkAuthAndFetch = async () => {
-    setLoading(true);
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      router.push('/');
-      return;
-    }
-
-    // Auto-set Inspector entity and facility from profile if logged in as inspector
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('role, entity, facility, pic:pic_id(entity, facility)')
-      .eq('id', sessionData.session.user.id)
-      .single();
-
-    if (userProfile) {
-      const assignedEntity = userProfile.entity || (userProfile.pic as any)?.entity;
-      const assignedFacility = userProfile.facility || (userProfile.pic as any)?.facility;
-      if (assignedEntity) setSelectedEntity(assignedEntity);
-      if (assignedFacility) setSelectedFacility(assignedFacility);
-    }
-
-    const { data, error } = await supabase
-      .from('inspections')
-      .select(`
-        *,
-        equipment:equipment_id(location, facility, area, entity)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setInspections(data as InspectionRecord[]);
-    }
-    setLoading(false);
-  };
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   useEffect(() => {
+    const checkAuthAndFetch = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        router.push('/');
+        return;
+      }
+
+      // Auto-set Inspector entity and facility from profile if logged in as inspector
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('role, entity, facility, pic:pic_id(entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (userProfile) {
+        const assignedEntity = userProfile.entity || userProfile.pic?.entity;
+        const assignedFacility = userProfile.facility || userProfile.pic?.facility;
+        if (assignedEntity) setSelectedEntity(assignedEntity);
+        if (assignedFacility) setSelectedFacility(assignedFacility);
+      }
+
+      const { data, error } = await supabase
+        .from('inspections')
+        .select(`
+          *,
+          equipment:equipment_id(location, facility, area, entity)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setInspections(data as InspectionRecord[]);
+      }
+      setLoading(false);
+    };
+
     checkAuthAndFetch();
-  }, []);
+  }, [supabase, router, reloadTrigger]);
 
   const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null);
   const [alertModal, setAlertModal] = useState<AlertState | null>(null);
@@ -106,7 +116,7 @@ export default function InspectionsPage() {
   const uniqueEntities = useMemo(() => {
     const set = new Set<string>();
     inspections.forEach(i => {
-      const ent = (i.equipment as any)?.entity;
+      const ent = i.equipment?.entity;
       if (ent) set.add(ent);
     });
     return ['All', ...Array.from(set).sort()];
@@ -115,14 +125,24 @@ export default function InspectionsPage() {
   const uniqueFacilities = useMemo(() => {
     const set = new Set<string>();
     inspections.forEach(i => {
-      const fac = (i.equipment as any)?.facility;
-      const ent = (i.equipment as any)?.entity;
+      const fac = i.equipment?.facility;
+      const ent = i.equipment?.entity;
       if (fac && (selectedEntity === 'All' || ent === selectedEntity)) {
         set.add(fac);
       }
     });
     return ['All', ...Array.from(set).sort()];
   }, [inspections, selectedEntity]);
+
+  // Period options derived from inspection data
+  const monthOptions = useMemo(() => {
+    return Array.from(new Set(inspections.map((i) => i.month_year).filter(Boolean))).sort().reverse();
+  }, [inspections]);
+
+  const weekOptions = useMemo(() => {
+    const base = inspections.filter((i) => i.month_year === selectedMonth);
+    return Array.from(new Set(base.map((i) => i.week).filter(Boolean))).sort();
+  }, [inspections, selectedMonth]);
 
   // Filtered Inspections
   const filteredInspections = useMemo(() => {
@@ -138,20 +158,40 @@ export default function InspectionsPage() {
         (selectedStatus === 'PASS' && item.status === 'PASS') ||
         (selectedStatus === 'NEEDS_ATTENTION' && item.status !== 'PASS');
 
-      const entity = (item.equipment as any)?.entity || '';
-      const facility = (item.equipment as any)?.facility || '';
+      const entity = item.equipment?.entity || '';
+      const facility = item.equipment?.facility || '';
       const matchesEntity = selectedEntity === 'All' || entity === selectedEntity;
       const matchesFacility = selectedFacility === 'All' || facility === selectedFacility;
 
-      return matchesSearch && matchesType && matchesStatus && matchesEntity && matchesFacility;
+      const matchesMonth = !selectedMonth || item.month_year === selectedMonth;
+      const matchesWeek  = !selectedWeek  || item.week === selectedWeek;
+
+      return matchesSearch && matchesType && matchesStatus && matchesEntity && matchesFacility && matchesMonth && matchesWeek;
     });
-  }, [inspections, searchQuery, selectedType, selectedStatus, selectedEntity, selectedFacility]);
+  }, [inspections, searchQuery, selectedType, selectedStatus, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // Metrics calculation
   const totalInspections = filteredInspections.length;
   const passCount = filteredInspections.filter((i) => i.status === 'PASS').length;
   const needsAttentionCount = filteredInspections.filter((i) => i.status !== 'PASS').length;
   const passRate = totalInspections > 0 ? Math.round((passCount / totalInspections) * 100) : 100;
+
+  // Reset week when month changes
+  const [prevMonth, setPrevMonth] = useState(selectedMonth);
+  if (prevMonth !== selectedMonth) {
+    setPrevMonth(selectedMonth);
+    setSelectedWeek('');
+  }
+
+  const setThisMonth = () => {
+    const now = new Date();
+    setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    setSelectedWeek('');
+  };
+  const clearPeriod = () => {
+    setSelectedMonth('');
+    setSelectedWeek('');
+  };
 
   return (
     <>
@@ -216,64 +256,119 @@ export default function InspectionsPage() {
           </div>
 
           {/* Filters & Search Bar */}
-          <div className="panel p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="relative w-full md:w-72">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search ID, inspector..."
-                className="input pl-10 text-xs"
-              />
-              <svg className="absolute left-3 top-3 w-4 h-4 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+          <div className="panel p-5 space-y-4">
+            {/* Row 1: search, entity, facility, type, status */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[140px]">
+                <label className="field-label text-[10px]">Search</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ID, inspector, type…"
+                    className="input pl-9 text-xs"
+                  />
+                  <svg className="absolute left-3 top-2.5 w-4 h-4 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Entity</label>
+                <select
+                  value={selectedEntity}
+                  onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }}
+                  className="input text-xs"
+                >
+                  {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Facility</label>
+                <select
+                  value={selectedFacility}
+                  onChange={(e) => setSelectedFacility(e.target.value)}
+                  className="input text-xs"
+                >
+                  {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label text-[10px]">Equipment Type</label>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="input text-xs"
+                >
+                  <option value="All">All Types</option>
+                  <option value="Fire Extinguisher">Fire Extinguisher</option>
+                  <option value="Fire Alarm">Fire Alarm</option>
+                  <option value="Fire Hydrant">Fire Hydrant</option>
+                  <option value="Emergency Lamp">Emergency Lamp</option>
+                  <option value="Emergency Exit Lamp">Emergency Exit Lamp</option>
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label text-[10px]">Status</label>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="input text-xs"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="PASS">Pass Only</option>
+                  <option value="NEEDS_ATTENTION">Needs Attention</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              {/* Entity Filter */}
-              <select
-                value={selectedEntity}
-                onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }}
-                className="input text-xs w-full md:w-36"
-              >
-                {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
-              </select>
+            {/* Row 2: period (month then week) */}
+            <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
+              <div>
+                <label className="field-label text-[10px]">Month</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="input text-xs w-40"
+                >
+                  <option value="">All Months</option>
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>{formatMonthYear(m)}</option>
+                  ))}
+                </select>
+              </div>
 
-              {/* Facility Filter */}
-              <select
-                value={selectedFacility}
-                onChange={(e) => setSelectedFacility(e.target.value)}
-                className="input text-xs w-full md:w-36"
-              >
-                {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
-              </select>
+              <div>
+                <label className="field-label text-[10px]">Week</label>
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  disabled={!selectedMonth}
+                  className="input text-xs w-36"
+                >
+                  <option value="">All Weeks</option>
+                  {weekOptions.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              </div>
 
-              {/* Type Filter */}
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="input text-xs w-full md:w-40"
-              >
-                <option value="All">All Types</option>
-                <option value="Fire Extinguisher">Fire Extinguisher</option>
-                <option value="Fire Alarm">Fire Alarm</option>
-                <option value="Fire Hydrant">Fire Hydrant</option>
-                <option value="Emergency Lamp">Emergency Lamp</option>
-                <option value="Emergency Exit Lamp">Emergency Exit Lamp</option>
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="input text-xs w-full md:w-36"
-              >
-                <option value="All">All Statuses</option>
-                <option value="PASS">Pass Only</option>
-                <option value="NEEDS_ATTENTION">Needs Attention</option>
-              </select>
+              <div className="flex gap-2 pb-0.5">
+                <button onClick={setThisMonth} className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">
+                  This Month
+                </button>
+                {(selectedMonth || selectedWeek) && (
+                  <button onClick={clearPeriod} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -308,8 +403,8 @@ export default function InspectionsPage() {
                     </tr>
                   ) : (
                     filteredInspections.map((item) => {
-                      const entity = (item.equipment as any)?.entity || '';
-                      const facility = (item.equipment as any)?.facility || '';
+                      const entity = item.equipment?.entity || '';
+                      const facility = item.equipment?.facility || '';
                       return (
                         <tr key={item.id} className="transition-colors hover:bg-white/[0.03]">
                           <td className="td font-bold text-ink-100">{item.equipment_no_id}</td>
@@ -390,7 +485,8 @@ export default function InspectionsPage() {
             <InspectionForm
               onSuccess={() => {
                 setShowCreateModal(false);
-                checkAuthAndFetch();
+                setLoading(true);
+                setReloadTrigger((t) => t + 1);
               }}
               onCancel={() => setShowCreateModal(false)}
             />

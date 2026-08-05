@@ -52,6 +52,36 @@ const initialFormData = {
 
 type ViewMode = 'grid' | 'list';
 
+type Pic = {
+    id: string;
+    name: string;
+    phone?: string | null;
+    image_profile?: string | null;
+    image_contact?: string | null;
+};
+
+type Equipment = {
+    id: string;
+    no_id: string | null;
+    type: string;
+    entity?: string | null;
+    facility?: string | null;
+    area?: string | null;
+    location?: string | null;
+    zone?: string | null;
+    placement?: string | null;
+    extinguisher_type?: string | null;
+    weight_kg?: string | null;
+    start_date?: string | null;
+    expire_date?: string | null;
+    pic_1_id?: string | null;
+    pic_2_id?: string | null;
+    pic_1_photo?: string | null;
+    pic_2_photo?: string | null;
+    pic_1?: Pic | null;
+    pic_2?: Pic | null;
+};
+
 function getFormTemplate(type: string): string {
     switch (type) {
         case 'Fire Alarm': return '/form_checklist/form checklist_fire alarm.html';
@@ -60,17 +90,6 @@ function getFormTemplate(type: string): string {
         case 'Emergency Lamp':
         case 'Emergency Exit Lamp': return '/form_checklist/form checklist_emergency lamp.html';
         default: return '/form_checklist/form checklist_fire alarm.html';
-    }
-}
-
-function getEquipmentIdLabel(type: string): string {
-    switch (type) {
-        case 'Fire Alarm': return 'ALARM ID';
-        case 'Fire Hydrant': return 'HYDRANT ID';
-        case 'Fire Extinguisher': return 'APAR ID';
-        case 'Emergency Lamp':
-        case 'Emergency Exit Lamp': return 'LIGHT ID';
-        default: return 'ID';
     }
 }
 
@@ -86,9 +105,10 @@ function getTypeBadgeColor(type: string): string {
 }
 
 export default function AdminDashboard() {
-    const [equipment, setEquipment] = useState<any[]>([]);
-    const [pics, setPics] = useState<any[]>([]);
+    const [equipment, setEquipment] = useState<Equipment[]>([]);
+    const [pics, setPics] = useState<Pic[]>([]);
     const [loading, setLoading] = useState(true);
+    const [reloadTrigger, setReloadTrigger] = useState(0);
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
     // Modal States
@@ -103,11 +123,14 @@ export default function AdminDashboard() {
     const [filterType, setFilterType] = useState('');
     const [filterArea, setFilterArea] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [prevFilterSignature, setPrevFilterSignature] = useState(
+        [searchQuery, filterEntity, filterFacility, filterType, filterArea].join('|')
+    );
     const itemsPerPage = 10;
 
     // UI State for Side/Bottom Sheet
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState<any>(null);
+    const [editingItem, setEditingItem] = useState<Equipment | null>(null);
     const [formData, setFormData] = useState(initialFormData);
     const [isSaving, setIsSaving] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -121,8 +144,6 @@ export default function AdminDashboard() {
     const [bulkPic2, setBulkPic2] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const pic1PhotoRef = useRef<HTMLInputElement>(null);
-    const pic2PhotoRef = useRef<HTMLInputElement>(null);
     const inlinePhotoInputRef = useRef<HTMLInputElement>(null);
     const pendingUploadRef = useRef<{ id: string; slot: 'pic_1_photo' | 'pic_2_photo' } | null>(null);
 
@@ -130,47 +151,45 @@ export default function AdminDashboard() {
     const router = useRouter();
 
     useEffect(() => {
-        const checkUser = async () => {
+        let cancelled = false;
+        const load = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 router.push('/');
                 return;
             }
-            fetchData();
-        };
-        checkUser();
-    }, []);
 
-    const fetchData = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('equipment')
-            .select('*, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact)')
-            .order('no_id', { ascending: true });
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('equipment')
+                .select('*, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact)')
+                .order('no_id', { ascending: true });
+            if (!cancelled && !error && data) setEquipment(data);
 
-        if (!error && data) setEquipment(data);
+            const { data: picsData } = await supabase.from('pic').select('id, name, phone, image_profile, image_contact');
+            if (!cancelled && picsData) setPics(picsData);
 
-        const { data: picsData } = await supabase.from('pic').select('id, name, phone, image_profile, image_contact');
-        if (picsData) setPics(picsData);
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (!cancelled && currentSession?.user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role, entity, facility, pic:pic_id(entity, facility)')
+                    .eq('id', currentSession.user.id)
+                    .single();
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role, entity, facility, pic:pic_id(entity, facility)')
-                .eq('id', session.user.id)
-                .single();
-
-            if (profile) {
-                const assignedEntity = profile.entity || (profile.pic as any)?.entity;
-                const assignedFacility = profile.facility || (profile.pic as any)?.facility;
-                if (assignedEntity) setFilterEntity(assignedEntity);
-                if (assignedFacility) setFilterFacility(assignedFacility);
+                if (profile) {
+                    const assignedEntity = profile.entity || (profile.pic as { entity?: string | null })?.entity;
+                    const assignedFacility = profile.facility || (profile.pic as { facility?: string | null })?.facility;
+                    if (assignedEntity) setFilterEntity(assignedEntity);
+                    if (assignedFacility) setFilterFacility(assignedFacility);
+                }
             }
-        }
 
-        setLoading(false);
-    };
+            if (!cancelled) setLoading(false);
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [supabase, router, reloadTrigger]);
 
     // --- Derived filter options ---
     const uniqueEntities = Array.from(new Set(equipment.map(e => e.entity).filter(Boolean))).sort();
@@ -186,12 +205,12 @@ export default function AdminDashboard() {
         const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
         return exp <= in30Days;
     }).map(item => {
-        const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
+        const exp = new Date(item.expire_date!); exp.setHours(0,0,0,0);
         const daysLeft = Math.round((exp.getTime() - today.getTime()) / 86400000);
         return { ...item, daysLeft, expired: daysLeft < 0 };
     }).sort((a,b) => a.daysLeft - b.daysLeft);
 
-    const getExpiryStatus = (item: any): { label: string; cls: string } | null => {
+    const getExpiryStatus = (item: Equipment): { label: string; cls: string } | null => {
         if (item.type !== 'Fire Extinguisher' || !item.expire_date) return null;
         const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
         const days = Math.round((exp.getTime() - today.getTime()) / 86400000);
@@ -221,9 +240,11 @@ export default function AdminDashboard() {
     const totalPages = Math.ceil(filteredEquipment.length / itemsPerPage);
     const paginatedEquipment = filteredEquipment.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    useEffect(() => {
+    const filterSignature = [searchQuery, filterEntity, filterFacility, filterType, filterArea].join('|');
+    if (filterSignature !== prevFilterSignature) {
+        setPrevFilterSignature(filterSignature);
         setCurrentPage(1);
-    }, [searchQuery, filterEntity, filterFacility, filterType, filterArea]);
+    }
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
@@ -238,7 +259,7 @@ export default function AdminDashboard() {
         setIsSheetOpen(true);
     };
 
-    const openEditSheet = (item: any) => {
+    const openEditSheet = (item: Equipment) => {
         setEditingItem(item);
         setFormData({
             no_id: item.no_id || '',
@@ -273,7 +294,7 @@ export default function AdminDashboard() {
         e.preventDefault();
         setIsSaving(true);
 
-        const payload: any = { ...formData };
+        const payload: Record<string, unknown> = { ...formData };
         if (!payload.zone) payload.zone = null;
         if (!payload.placement) payload.placement = null;
         if (!payload.extinguisher_type) payload.extinguisher_type = null;
@@ -299,7 +320,7 @@ export default function AdminDashboard() {
         setIsSaving(false);
         if (!error) {
             closeSheet();
-            fetchData();
+            setReloadTrigger(t => t + 1);
         } else {
             setAlertModal({ isOpen: true, title: 'Save Error', message: error.message, type: 'error' });
         }
@@ -320,7 +341,7 @@ export default function AdminDashboard() {
                     // List any extra files stored in folder `{id}/` in equipment_photos
                     const { data: folderFiles } = await supabase.storage.from('equipment_photos').list(id);
                     if (folderFiles && folderFiles.length > 0) {
-                        const folderPaths = folderFiles.map(f => `${id}/${f.name}`);
+                        const folderPaths = folderFiles.map((f: { name: string }) => `${id}/${f.name}`);
                         await supabase.storage.from('equipment_photos').remove(folderPaths);
                     }
                 }
@@ -328,7 +349,7 @@ export default function AdminDashboard() {
                 // 2. Find and delete photos from related inspection logs
                 const { data: relatedInspections } = await supabase.from('inspections').select('photo_url').eq('equipment_id', id);
                 if (relatedInspections && relatedInspections.length > 0) {
-                    const inspUrls = relatedInspections.map(i => i.photo_url);
+                    const inspUrls = relatedInspections.map((i: { photo_url: string | null }) => i.photo_url);
                     await deleteStorageFiles(supabase, 'inspection_photos', inspUrls);
                     await supabase.from('inspections').delete().eq('equipment_id', id);
                 }
@@ -336,7 +357,7 @@ export default function AdminDashboard() {
                 // 3. Delete the equipment record
                 const { error } = await supabase.from('equipment').delete().eq('id', id);
                 if (!error) {
-                    fetchData();
+                    setReloadTrigger(t => t + 1);
                 } else {
                     setAlertModal({ isOpen: true, title: 'Error', message: error.message, type: 'error' });
                 }
@@ -352,8 +373,8 @@ export default function AdminDashboard() {
 
         // Check for existing photo and delete it
         const { data: oldEq } = await supabase.from('equipment').select(slot).eq('id', id).single();
-        if (oldEq && (oldEq as any)[slot]) {
-            const oldUrl = (oldEq as any)[slot] as string;
+        if (oldEq && oldEq[slot]) {
+            const oldUrl = oldEq[slot] as string;
             const oldFilename = oldUrl.split('/').pop();
             if (oldFilename) {
                 await supabase.storage.from('equipment_photos').remove([`${id}/${oldFilename}`]);
@@ -361,7 +382,7 @@ export default function AdminDashboard() {
         }
 
         // Upload to Supabase Storage bucket named 'equipment_photos'
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
             .from('equipment_photos')
             .upload(path, file, { upsert: true });
 
@@ -388,13 +409,13 @@ export default function AdminDashboard() {
             return;
         }
 
-        fetchData();
+        setReloadTrigger(t => t + 1);
     };
 
     const handleInlinePicChange = async (id: string, field: 'pic_1_id' | 'pic_2_id', value: string) => {
         const val = value === '' ? null : value;
         const { error } = await supabase.from('equipment').update({ [field]: val, updated_at: new Date().toISOString() }).eq('id', id);
-        if (!error) fetchData();
+        if (!error) setReloadTrigger(t => t + 1);
         else setAlertModal({ isOpen: true, title: 'Error', message: `Failed to assign PIC: ${error.message}`, type: 'error' });
     };
 
@@ -404,15 +425,10 @@ export default function AdminDashboard() {
         const { id, slot } = pendingUploadRef.current;
         setUploadingPhoto({ id, slot });
         await uploadPhotoToStorage(file, id, slot);
-        fetchData();
+        setReloadTrigger(t => t + 1);
         setUploadingPhoto(null);
         pendingUploadRef.current = null;
         if (inlinePhotoInputRef.current) inlinePhotoInputRef.current.value = '';
-    };
-
-    const triggerInlinePhotoUpload = (id: string, slot: 'pic_1_photo' | 'pic_2_photo') => {
-        pendingUploadRef.current = { id, slot };
-        if (inlinePhotoInputRef.current) inlinePhotoInputRef.current.click();
     };
 
     const handleFormPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, slot: 'pic_1_photo' | 'pic_2_photo') => {
@@ -435,12 +451,12 @@ export default function AdminDashboard() {
 
     // --- Print Checklist ---
 
-    const generatePrintHTML = async (items: any[]) => {
+    const generatePrintHTML = async (items: Equipment[]) => {
         if (items.length === 0) return;
 
         let finalHtml = '';
         let baseHeader = '';
-        let baseFooter = `
+        const baseFooter = `
 <script>
   window.addEventListener('load', function() {
     setTimeout(function() { window.print(); }, 500);
@@ -453,7 +469,7 @@ export default function AdminDashboard() {
             const templatePath = getFormTemplate(item.type);
 
             const res = await fetch(templatePath);
-            let html = await res.text();
+            const html = await res.text();
 
             if (i === 0) {
                 const bodyMatch = html.match(/([\s\S]*?<body[^>]*>)/);
@@ -560,10 +576,10 @@ export default function AdminDashboard() {
         }
     };
 
-    const handlePrint = async (item: any) => {
+    const handlePrint = async (item: Equipment) => {
         try {
             await generatePrintHTML([item]);
-        } catch (err) {
+        } catch {
             setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load checklist template.', type: 'error' });
         }
     };
@@ -572,7 +588,7 @@ export default function AdminDashboard() {
         if (filteredEquipment.length === 0) return;
         try {
             await generatePrintHTML(filteredEquipment);
-        } catch (err) {
+        } catch {
             setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load checklist templates.', type: 'error' });
         }
     };
@@ -645,7 +661,7 @@ export default function AdminDashboard() {
                     .in('id', ids);
 
                 if (!error) {
-                    fetchData();
+                    setReloadTrigger(t => t + 1);
                     setSelectedIds(new Set());
                     if (field === 'pic_1_id') setBulkPic1('');
                     if (field === 'pic_2_id') setBulkPic2('');
@@ -678,12 +694,12 @@ export default function AdminDashboard() {
                 const workbook = XLSX.read(bstr, { type: 'binary' });
                 const worksheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[worksheetName];
-                const rawData = XLSX.utils.sheet_to_json<any>(worksheet);
+                const rawData = XLSX.utils.sheet_to_json<Record<string, string | number | null | undefined>>(worksheet);
 
                 const formattedData = rawData.map(row => {
-                    const item: any = {};
+                    const item: Record<string, unknown> = {};
 
-                    const getPicId = (name: string | undefined) => {
+                    const getPicId = (name: unknown) => {
                         if (!name) return null;
                         const found = pics.find(p => p.name.toLowerCase().trim() === String(name).toLowerCase().trim());
                         return found ? found.id : null;
@@ -698,7 +714,7 @@ export default function AdminDashboard() {
                     item.zone = row['Zone'] !== undefined && row['Zone'] !== '' ? String(row['Zone']) : null;
                     item.placement = row['Placement'] !== undefined && row['Placement'] !== '' ? String(row['Placement']) : null;
                     item.extinguisher_type = row['Extinguisher Type'] !== undefined && row['Extinguisher Type'] !== '' ? String(row['Extinguisher Type']) : null;
-                    item.weight_kg = row['Weight (Kg)'] !== undefined && row['Weight (Kg)'] !== '' ? parseFloat(row['Weight (Kg)']) : null;
+                    item.weight_kg = row['Weight (Kg)'] !== undefined && row['Weight (Kg)'] !== '' ? parseFloat(String(row['Weight (Kg)'])) : null;
                     item.start_date = row['Start Date'] !== undefined && row['Start Date'] !== '' ? String(row['Start Date']) : null;
                     item.expire_date = row['Expire Date'] !== undefined && row['Expire Date'] !== '' ? String(row['Expire Date']) : null;
                     item.pic_1_id = getPicId(row['PIC 1']);
@@ -712,12 +728,12 @@ export default function AdminDashboard() {
                     const { error } = await supabase.from('equipment').insert(formattedData);
                     if (error) throw error;
                     setAlertModal({ isOpen: true, title: 'Import Complete', message: `Successfully imported ${formattedData.length} records!`, type: 'success' });
-                    fetchData();
+                    setReloadTrigger(t => t + 1);
                 } else {
                     setAlertModal({ isOpen: true, title: 'Import Warning', message: 'No valid records found. Make sure no_id and type are provided.', type: 'info' });
                 }
-            } catch (err: any) {
-                setAlertModal({ isOpen: true, title: 'Import Error', message: `Error parsing Excel file: ${err.message}`, type: 'error' });
+            } catch (err: unknown) {
+                setAlertModal({ isOpen: true, title: 'Import Error', message: `Error parsing Excel file: ${err instanceof Error ? err.message : String(err)}`, type: 'error' });
             } finally {
                 setIsImporting(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -983,7 +999,7 @@ export default function AdminDashboard() {
                                         {item.pic_1?.name && (
                                             <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
                                                 {item.pic_1?.image_profile ? (
-                                                    <img src={item.pic_1.image_profile} className="h-5 w-5 flex-shrink-0 rounded-full object-cover" alt="" />
+                                                    <ProtectedImage src={item.pic_1.image_profile} className="h-5 w-5 flex-shrink-0 rounded-full object-cover" alt="" />
                                                 ) : (
                                                     <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-ember-800 text-xs font-bold text-white">
                                                         {item.pic_1.name[0]}
@@ -995,7 +1011,7 @@ export default function AdminDashboard() {
                                         {item.pic_2?.name && (
                                             <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5">
                                                 {item.pic_2?.image_profile ? (
-                                                    <img src={item.pic_2.image_profile} className="h-5 w-5 flex-shrink-0 rounded-full object-cover" alt="" />
+                                                    <ProtectedImage src={item.pic_2.image_profile} className="h-5 w-5 flex-shrink-0 rounded-full object-cover" alt="" />
                                                 ) : (
                                                     <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-800 text-xs font-bold text-white">
                                                         {item.pic_2.name[0]}
@@ -1082,8 +1098,6 @@ export default function AdminDashboard() {
                                     </thead>
                                     <tbody className="divide-y divide-line">
                                         {paginatedEquipment.map((item) => {
-                                            const isUploading1 = uploadingPhoto?.id === item.id && uploadingPhoto?.slot === 'pic_1_photo';
-                                            const isUploading2 = uploadingPhoto?.id === item.id && uploadingPhoto?.slot === 'pic_2_photo';
                                             const expiryBadge = getExpiryStatus(item);
 
                                             return (
@@ -1109,7 +1123,7 @@ export default function AdminDashboard() {
                                                     <td className="td">
                                                         <div className="flex items-center gap-2">
                                                             {item.pic_1?.image_profile ? (
-                                                                <img src={item.pic_1.image_profile} className="h-6 w-6 rounded-full object-cover" alt="" />
+                                                                <ProtectedImage src={item.pic_1.image_profile} className="h-6 w-6 rounded-full object-cover" alt="" />
                                                             ) : item.pic_1?.name ? (
                                                                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ember-800 text-xs font-bold text-white">{item.pic_1.name[0]}</div>
                                                             ) : (
@@ -1128,7 +1142,7 @@ export default function AdminDashboard() {
                                                     <td className="td">
                                                         <div className="flex items-center gap-2">
                                                             {item.pic_2?.image_profile ? (
-                                                                <img src={item.pic_2.image_profile} className="h-6 w-6 rounded-full object-cover" alt="" />
+                                                                <ProtectedImage src={item.pic_2.image_profile} className="h-6 w-6 rounded-full object-cover" alt="" />
                                                             ) : item.pic_2?.name ? (
                                                                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-800 text-xs font-bold text-white">{item.pic_2.name[0]}</div>
                                                             ) : (
@@ -1355,7 +1369,7 @@ export default function AdminDashboard() {
                                     <label className="mb-2 block text-xs font-medium text-ink-400">Photo 1</label>
                                     <div className="group/photo relative">
                                         {formData.pic_1_photo ? (
-                                            <img src={formData.pic_1_photo} alt="Photo 1" className="h-32 w-full rounded-xl border border-line object-cover" />
+                                            <ProtectedImage src={formData.pic_1_photo} alt="Photo 1" className="h-32 w-full rounded-xl border border-line object-cover" />
                                         ) : (
                                             <div className="flex h-32 w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-ink-600">
                                                 <CameraIcon />
@@ -1381,7 +1395,7 @@ export default function AdminDashboard() {
                                     <label className="mb-2 block text-xs font-medium text-ink-400">Photo 2</label>
                                     <div className="group/photo relative">
                                         {formData.pic_2_photo ? (
-                                            <img src={formData.pic_2_photo} alt="Photo 2" className="h-32 w-full rounded-xl border border-line object-cover" />
+                                            <ProtectedImage src={formData.pic_2_photo} alt="Photo 2" className="h-32 w-full rounded-xl border border-line object-cover" />
                                         ) : (
                                             <div className="flex h-32 w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-ink-600">
                                                 <CameraIcon />

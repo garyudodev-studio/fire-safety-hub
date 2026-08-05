@@ -33,6 +33,7 @@ type EquipmentRow = {
   entity: string;
   updated_at: string;
   pic_1?: { name?: string } | null;
+  pic_2?: { name?: string } | null;
 };
 
 function getTypeBadgeColor(type: string): string {
@@ -62,12 +63,12 @@ const EQUIPMENT_TYPES = [
   'Emergency Exit Lamp',
 ];
 
-function firstOfMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
+function formatMonthYear(monthYear: string): string {
+  const [mm, yyyy] = monthYear.split('/');
+  const monthNum = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
+  return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
 }
 
 function PassRateRing({ rate }: { rate: number }) {
@@ -111,8 +112,8 @@ export default function GuestDashboard() {
   const [selectedFacility, setSelectedFacility] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(''); // "MM/YYYY" from inspection data
+  const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   const supabase = getSupabaseClient();
 
@@ -147,14 +148,14 @@ export default function GuestDashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [supabase]);
 
   // Cascading entity & facility options
   const uniqueEntities = useMemo(() => {
     const set = new Set<string>();
     equipment.forEach(e => { if (e.entity) set.add(e.entity); });
     inspections.forEach(i => {
-      const ent = (i.equipment as any)?.entity;
+      const ent = i.equipment?.entity;
       if (ent) set.add(ent);
     });
     return Array.from(set).sort();
@@ -168,8 +169,8 @@ export default function GuestDashboard() {
       }
     });
     inspections.forEach(i => {
-      const ent = (i.equipment as any)?.entity;
-      const fac = (i.equipment as any)?.facility;
+      const ent = i.equipment?.entity;
+      const fac = i.equipment?.facility;
       if (fac && (selectedEntity === 'All' || ent === selectedEntity)) {
         set.add(fac);
       }
@@ -177,11 +178,21 @@ export default function GuestDashboard() {
     return Array.from(set).sort();
   }, [equipment, inspections, selectedEntity]);
 
+  // Period options derived from inspection data
+  const monthOptions = useMemo(() => {
+    return Array.from(new Set(inspections.map((i) => i.month_year).filter(Boolean))).sort().reverse();
+  }, [inspections]);
+
+  const weekOptions = useMemo(() => {
+    const base = inspections.filter((i) => i.month_year === selectedMonth);
+    return Array.from(new Set(base.map((i) => i.week).filter(Boolean))).sort();
+  }, [inspections, selectedMonth]);
+
   // Filtered Inspections for Guest
   const filteredInspections = useMemo(() => {
     return inspections.filter((item) => {
-      const eqEntity = (item.equipment as any)?.entity || '';
-      const eqFacility = (item.equipment as any)?.facility || '';
+      const eqEntity = item.equipment?.entity || '';
+      const eqFacility = item.equipment?.facility || '';
 
       const matchEntity = selectedEntity === 'All' || eqEntity === selectedEntity;
       const matchFacility = selectedFacility === 'All' || eqFacility === selectedFacility;
@@ -197,13 +208,12 @@ export default function GuestDashboard() {
         (selectedStatus === 'PASS' && item.status === 'PASS') ||
         (selectedStatus === 'NEEDS_ATTENTION' && item.status !== 'PASS');
 
-      const itemDate = item.inspection_date;
-      const matchFrom = !dateFrom || itemDate >= dateFrom;
-      const matchTo = !dateTo || itemDate <= dateTo;
+      const matchesMonth = !selectedMonth || item.month_year === selectedMonth;
+      const matchesWeek  = !selectedWeek  || item.week === selectedWeek;
 
-      return matchEntity && matchFacility && matchSearch && matchType && matchStatus && matchFrom && matchTo;
+      return matchEntity && matchFacility && matchSearch && matchType && matchStatus && matchesMonth && matchesWeek;
     });
-  }, [inspections, selectedEntity, selectedFacility, searchQuery, selectedType, selectedStatus, dateFrom, dateTo]);
+  }, [inspections, selectedEntity, selectedFacility, searchQuery, selectedType, selectedStatus, selectedMonth, selectedWeek]);
 
   // Filtered Equipment for Guest
   const filteredEquipment = useMemo(() => {
@@ -222,9 +232,17 @@ export default function GuestDashboard() {
   }, [equipment, selectedEntity, selectedFacility, searchQuery, selectedType]);
 
   const setThisMonth = () => {
-    setDateFrom(firstOfMonthStr());
-    setDateTo(todayStr());
+    const now = new Date();
+    setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    setSelectedWeek('');
   };
+
+  // Reset week when month changes
+  const [prevMonth, setPrevMonth] = useState(selectedMonth);
+  if (prevMonth !== selectedMonth) {
+    setPrevMonth(selectedMonth);
+    setSelectedWeek('');
+  }
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -232,8 +250,8 @@ export default function GuestDashboard() {
     setSelectedFacility('All');
     setSelectedType('All');
     setSelectedStatus('All');
-    setDateFrom('');
-    setDateTo('');
+    setSelectedMonth('');
+    setSelectedWeek('');
   };
 
   const totalInspections = filteredInspections.length;
@@ -246,7 +264,9 @@ export default function GuestDashboard() {
   const overallPending = Math.max(0, totalMasterlistAll - uniqueInspectedCount);
   const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueInspectedCount / totalMasterlistAll) * 100) : 0;
 
-  const datePeriodText = dateFrom || dateTo ? `${dateFrom || 'Start'} to ${dateTo || 'Today'}` : 'All Recorded Dates';
+  const datePeriodText = selectedMonth
+    ? `${formatMonthYear(selectedMonth)}${selectedWeek ? `, ${selectedWeek}` : ''}`
+    : 'All Recorded Dates';
 
   return (
     <div className="min-h-screen bg-ink-950 p-4 md:p-8">
@@ -388,32 +408,41 @@ export default function GuestDashboard() {
               </select>
             </div>
 
-            {/* Date Period Pickers */}
+            {/* Period: Month & Week Pickers */}
             <div>
-              <label className="field-label text-[10px]">From Date</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="input text-xs w-36"
-              />
+              <label className="field-label text-[10px]">Month</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="input text-xs w-40"
+              >
+                <option value="">All Months</option>
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>{formatMonthYear(m)}</option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <label className="field-label text-[10px]">To Date</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+              <label className="field-label text-[10px]">Week</label>
+              <select
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(e.target.value)}
+                disabled={!selectedMonth}
                 className="input text-xs w-36"
-              />
+              >
+                <option value="">All Weeks</option>
+                {weekOptions.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex gap-2 pb-0.5">
               <button onClick={setThisMonth} className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">
                 This Month
               </button>
-              {(searchQuery || selectedEntity !== 'All' || selectedFacility !== 'All' || selectedType !== 'All' || selectedStatus !== 'All' || dateFrom || dateTo) && (
+              {(searchQuery || selectedEntity !== 'All' || selectedFacility !== 'All' || selectedType !== 'All' || selectedStatus !== 'All' || selectedMonth || selectedWeek) && (
                 <button onClick={clearFilters} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
                   Reset
                 </button>
@@ -555,7 +584,8 @@ export default function GuestDashboard() {
                     <th className="th">Type</th>
                     <th className="th">Entity / Facility</th>
                     <th className="th">Location / Area</th>
-                    <th className="th">PIC</th>
+                    <th className="th">PIC 1</th>
+                    <th className="th">PIC 2</th>
                     <th className="th">Last Updated</th>
                   </tr>
                 </thead>
@@ -578,6 +608,9 @@ export default function GuestDashboard() {
                       <td className="td text-sm text-ink-300">
                         {item.pic_1?.name || <span className="text-ink-600">Unassigned</span>}
                       </td>
+                      <td className="td text-sm text-ink-300">
+                        {item.pic_2?.name || <span className="text-ink-600">Unassigned</span>}
+                      </td>
                       <td className="td text-sm text-ink-500">
                         {new Date(item.updated_at).toLocaleDateString()}
                       </td>
@@ -585,7 +618,7 @@ export default function GuestDashboard() {
                   ))}
                   {filteredEquipment.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center text-ink-500">
+                      <td colSpan={7} className="py-16 text-center text-ink-500">
                         No equipment records match your filter criteria.
                       </td>
                     </tr>
@@ -621,8 +654,8 @@ export default function GuestDashboard() {
                         </span>
                       </td>
                       <td className="td text-xs text-ink-300">
-                        <span className="font-semibold text-ink-100">{(item.equipment as any)?.entity || '-'}</span>
-                        <div className="text-[11px] text-ink-500">{(item.equipment as any)?.facility || '-'}</div>
+                        <span className="font-semibold text-ink-100">{item.equipment?.entity || '-'}</span>
+                        <div className="text-[11px] text-ink-500">{item.equipment?.facility || '-'}</div>
                       </td>
                       <td className="td text-xs text-ink-300">
                         <div>{item.inspection_date}</div>
