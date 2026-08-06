@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
@@ -29,11 +30,11 @@ interface EquipmentMaster {
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
-    case 'Fire Alarm':          return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
-    case 'Fire Hydrant':        return 'bg-cyan-950/60 text-cyan-300 border-cyan-900/60';
-    case 'Fire Extinguisher':   return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
-    case 'Emergency Lamp':      return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-    default:                    return 'bg-white/[0.04] text-ink-300 border-line';
+    case 'Fire Alarm':          return 'bg-sky-50 text-sky-800 border-sky-200';
+    case 'Fire Hydrant':        return 'bg-cyan-50 text-cyan-800 border-cyan-200';
+    case 'Fire Extinguisher':   return 'bg-orange-50 text-orange-800 border-orange-200';
+    case 'Emergency Lamp':      return 'bg-amber-50 text-amber-800 border-amber-200';
+    default:                    return 'bg-stone-50 text-stone-600 border-stone-200';
   }
 }
 
@@ -52,29 +53,29 @@ const TAB_SCHEME: Record<TabKey, {
   hover: string;
 }> = {
   uninspected: {
-    border: 'border-amber-900/40',
-    headerBg: 'bg-amber-950/20',
-    divider: 'divide-amber-900/20',
-    hover: 'hover:bg-amber-950/10',
+    border: 'border-amber-200',
+    headerBg: 'bg-amber-50/60',
+    divider: 'divide-amber-100',
+    hover: 'hover:bg-amber-50/50',
   },
   unsafe: {
-    border: 'border-rose-900/40',
-    headerBg: 'bg-rose-950/20',
-    divider: 'divide-rose-900/20',
-    hover: 'hover:bg-rose-950/10',
+    border: 'border-rose-200',
+    headerBg: 'bg-rose-50/60',
+    divider: 'divide-rose-100',
+    hover: 'hover:bg-rose-50/50',
   },
   safe: {
-    border: 'border-emerald-900/40',
-    headerBg: 'bg-emerald-950/20',
-    divider: 'divide-emerald-900/20',
-    hover: 'hover:bg-emerald-950/10',
+    border: 'border-emerald-200',
+    headerBg: 'bg-emerald-50/60',
+    divider: 'divide-emerald-100',
+    hover: 'hover:bg-emerald-50/50',
   },
 };
 
 // PIC cell: profile image icon + name (falls back to initial avatar)
 function PicCell({ pic, accent }: { pic?: PicPerson | null; accent: string }) {
   if (!pic?.name) {
-    return <span className="text-[11px] italic text-ink-600">—</span>;
+    return <span className="text-[11px] italic text-stone-400">—</span>;
   }
   return (
     <div className="flex items-center gap-2 min-w-0" title={pic.name}>
@@ -89,7 +90,7 @@ function PicCell({ pic, accent }: { pic?: PicPerson | null; accent: string }) {
           {pic.name[0].toUpperCase()}
         </span>
       )}
-      <span className="truncate text-xs text-ink-200">{pic.name}</span>
+      <span className="truncate text-xs text-stone-700">{pic.name}</span>
     </div>
   );
 }
@@ -103,16 +104,16 @@ type TabKey = 'uninspected' | 'unsafe' | 'safe';
 // Per-tab table color scheme (border line matches the active tab accent)
 
 function KpiCard({
-  label, value, sub, color = 'text-ink-100', borderColor = '',
+  label, value, sub, color = 'text-stone-900', borderColor = '',
 }: {
   label: string; value: string | number; sub?: string;
   color?: string; borderColor?: string;
 }) {
   return (
     <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">{label}</span>
       <span className={`text-4xl font-bold mt-1 ${color}`}>{value}</span>
-      {sub && <span className="text-xs text-ink-500 mt-0.5">{sub}</span>}
+      {sub && <span className="text-xs text-stone-500 mt-0.5">{sub}</span>}
     </div>
   );
 }
@@ -134,27 +135,27 @@ function Pagination({
   if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
 
   return (
-    <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 border-t border-line bg-ink-950/40 sm:flex-row">
-      <span className="text-xs text-ink-500">
+    <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 border-t border-stone-200 bg-stone-50/60 sm:flex-row">
+      <span className="text-xs text-stone-500">
         {total === 0 ? '0 results' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
-          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="px-2.5 py-1.5 rounded-lg text-xs text-stone-500 hover:bg-stone-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           ‹ Prev
         </button>
         {pages.map((p, idx) =>
           p === '…' ? (
-            <span key={`e${idx}`} className="px-1.5 text-ink-600 text-xs">…</span>
+            <span key={`e${idx}`} className="px-1.5 text-stone-400 text-xs">…</span>
           ) : (
             <button key={p} onClick={() => onChange(p as number)}
-              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p === page ? 'bg-ember-600 text-white' : 'text-ink-400 hover:bg-ink-800'}`}>
+              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p === page ? 'bg-red-800 text-white hover:bg-red-800' : 'text-stone-500 hover:bg-stone-200'}`}>
               {p}
             </button>
           )
         )}
         <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
-          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="px-2.5 py-1.5 rounded-lg text-xs text-stone-500 hover:bg-stone-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           Next ›
         </button>
       </div>
@@ -165,6 +166,15 @@ function Pagination({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function GuestReportsPage() {
+  return (
+    <Suspense fallback={<div className="p-4 md:p-8 text-stone-500 text-sm">Loading reports…</div>}>
+      <GuestReportsInner />
+    </Suspense>
+  );
+}
+
+function GuestReportsInner() {
+  const searchParams = useSearchParams();
   const supabase = getSupabaseClient();
 
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
@@ -173,20 +183,40 @@ export default function GuestReportsPage() {
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType,     setSelectedType]     = useState('All');
-  const [selectedEntity,   setSelectedEntity]   = useState('All');
-  const [selectedFacility, setSelectedFacility] = useState('All');
-  const [selectedMonth, setSelectedMonth] = useState('');
-  const [selectedWeek,  setSelectedWeek]  = useState('');
+  // Filters (initialized from URL query params)
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '');
+  const [selectedType,     setSelectedType]     = useState(() => {
+    const t = searchParams.get('type');
+    return t && (t === 'All' || EQUIPMENT_TYPES.includes(t)) ? t : 'All';
+  });
+  const [selectedEntity,   setSelectedEntity]   = useState(searchParams.get('entity') ?? 'All');
+  const [selectedFacility, setSelectedFacility] = useState(searchParams.get('facility') ?? 'All');
+  const [selectedMonth, setSelectedMonth] = useState(searchParams.get('month') ?? '');
+  const [selectedWeek,  setSelectedWeek]  = useState(searchParams.get('week') ?? '');
 
   // Tab & pagination
-  const [activeTab,     setActiveTab]     = useState<TabKey>('uninspected');
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    const t = searchParams.get('tab');
+    return t === 'unsafe' || t === 'safe' || t === 'uninspected' ? t : 'uninspected';
+  });
   const [unsafePage,    setUnsafePage]    = useState(1);
   const [safePage,      setSafePage]      = useState(1);
   const [uninspPage,    setUninspPage]    = useState(1);
   const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  // ── Keep URL in sync with filters (external system update) ──
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('q', searchQuery);
+    if (selectedEntity !== 'All') params.set('entity', selectedEntity);
+    if (selectedFacility !== 'All') params.set('facility', selectedFacility);
+    if (selectedType !== 'All') params.set('type', selectedType);
+    if (selectedMonth) params.set('month', selectedMonth);
+    if (selectedWeek) params.set('week', selectedWeek);
+    if (activeTab !== 'uninspected') params.set('tab', activeTab);
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  }, [searchQuery, selectedEntity, selectedFacility, selectedType, selectedMonth, selectedWeek, activeTab]);
 
   // ── Derived filter options from masterlist ──
   const uniqueEntities   = useMemo(() => ['All', ...Array.from(new Set(masterlist.map(e => e.entity).filter(Boolean) as string[])).sort()], [masterlist]);
@@ -290,17 +320,6 @@ export default function GuestReportsPage() {
     setSafePage(1);
     setUninspPage(1);
   }
-  const [prevEntity, setPrevEntity] = useState(selectedEntity);
-  if (prevEntity !== selectedEntity) {
-    setPrevEntity(selectedEntity);
-    setSelectedFacility('All');
-  }
-  const [prevMonth, setPrevMonth] = useState(selectedMonth);
-  if (prevMonth !== selectedMonth) {
-    setPrevMonth(selectedMonth);
-    setSelectedWeek('');
-  }
-
   // ── Pagination slices ──
   const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
   const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
@@ -324,13 +343,13 @@ export default function GuestReportsPage() {
     return (
       <div>
         {loading ? (
-          <div className="py-20 text-center text-ink-500 flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-700 border-t-ember-500" />
+          <div className="py-20 text-center text-stone-500 flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-stone-300 border-t-red-800" />
             <p className="text-sm">Loading reports…</p>
           </div>
         ) : rows.length === 0 ? (
-          <div className="py-16 text-center text-ink-500">
-            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 ${isUnsafe ? 'bg-emerald-950/50 text-emerald-400' : 'bg-sky-950/50 text-sky-400'}`}>
+          <div className="py-16 text-center text-stone-500">
+            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 ${isUnsafe ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {isUnsafe ? <polyline points="20 6 9 17 4 12" /> : <circle cx="12" cy="12" r="9" />}
               </svg>
@@ -357,15 +376,15 @@ export default function GuestReportsPage() {
                     const entity   = item.equipment?.entity   ?? '';
                     const facility = item.equipment?.facility ?? '';
                     const accent   = isUnsafe
-                      ? 'border-rose-800/50 text-rose-300 bg-rose-950/60'
-                      : 'border-emerald-800/50 text-emerald-300 bg-emerald-950/60';
+                      ? 'border-rose-200 text-rose-700 bg-rose-50'
+                      : 'border-emerald-200 text-emerald-700 bg-emerald-50';
                     return (
                       <tr
                         key={item.id}
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer ${s.hover}`}
                       >
-                        <td data-label="Equipment ID" className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
+                        <td data-label="Equipment ID" className={`td font-bold ${isUnsafe ? 'text-rose-700' : 'text-emerald-700'}`}>
                           <span className="block truncate">{item.equipment_no_id}</span>
                         </td>
                         <td data-label="Type" className="td">
@@ -374,13 +393,13 @@ export default function GuestReportsPage() {
                           </span>
                         </td>
                         <td data-label="Entity / Facility" className="td text-xs">
-                          {entity && <div className="text-ink-200 font-medium truncate">{entity}</div>}
-                          {facility && <div className="text-ink-500 text-[11px] truncate">{facility}</div>}
-                          {!entity && !facility && <span className="text-ink-600 italic">—</span>}
+                          {entity && <div className="text-stone-800 font-medium truncate">{entity}</div>}
+                          {facility && <div className="text-stone-500 text-[11px] truncate">{facility}</div>}
+                          {!entity && !facility && <span className="text-stone-400 italic">—</span>}
                         </td>
-                        <td data-label="Date / Period" className="td text-xs text-ink-300">
+                        <td data-label="Date / Period" className="td text-xs text-stone-600">
                           <div className="truncate">{item.inspection_date}</div>
-                          <div className="text-ink-500 text-[11px] truncate">{item.week} ({item.month_year})</div>
+                          <div className="text-stone-400 text-[11px] truncate">{item.week} ({item.month_year})</div>
                         </td>
                         <td data-label="PIC 1" className="td">
                           <PicCell pic={item.equipment?.pic_1} accent={accent} />
@@ -391,7 +410,7 @@ export default function GuestReportsPage() {
                         <td data-label="Action" className="td text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
-                            className={`btn btn-ghost text-xs px-3 py-1 whitespace-nowrap ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                            className={`btn btn-ghost text-xs px-3 py-1 whitespace-nowrap ${isUnsafe ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                           >
                             Details
                           </button>
@@ -420,13 +439,13 @@ export default function GuestReportsPage() {
     return (
       <div>
         {loading ? (
-          <div className="py-20 text-center text-ink-500 flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-700 border-t-ember-500" />
+          <div className="py-20 text-center text-stone-500 flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-stone-300 border-t-red-800" />
             <p className="text-sm">Loading equipment…</p>
           </div>
         ) : uninspSlice.length === 0 ? (
-          <div className="py-16 text-center text-ink-500">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-emerald-950/50 text-emerald-400">
+          <div className="py-16 text-center text-stone-500">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-emerald-50 text-emerald-600">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -455,7 +474,7 @@ export default function GuestReportsPage() {
                 <tbody className={`divide-y ${s.divider}`}>
                   {uninspSlice.map((equip) => (
                     <tr key={equip.id} className={`transition-colors ${s.hover}`}>
-                      <td data-label="Equipment ID" className="td font-bold text-amber-300">
+                      <td data-label="Equipment ID" className="td font-bold text-amber-700">
                         <span className="block truncate">{equip.no_id}</span>
                       </td>
                       <td data-label="Type" className="td">
@@ -464,23 +483,23 @@ export default function GuestReportsPage() {
                         </span>
                       </td>
                       <td data-label="Entity / Facility" className="td text-xs">
-                        {equip.entity && <div className="text-ink-200 font-medium truncate">{equip.entity}</div>}
-                        {equip.facility && <div className="text-ink-500 text-[11px] truncate">{equip.facility}</div>}
-                        {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
+                        {equip.entity && <div className="text-stone-800 font-medium truncate">{equip.entity}</div>}
+                        {equip.facility && <div className="text-stone-500 text-[11px] truncate">{equip.facility}</div>}
+                        {!equip.entity && !equip.facility && <span className="text-stone-400 italic">—</span>}
                       </td>
-                      <td data-label="Area / Location" className="td text-xs text-ink-300">
+                      <td data-label="Area / Location" className="td text-xs text-stone-600">
                         <span className="block truncate">
                           {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
                         </span>
                       </td>
                       <td data-label="PIC 1" className="td">
-                        <PicCell pic={equip.pic_1} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
+                        <PicCell pic={equip.pic_1} accent="border-amber-200 text-amber-700 bg-amber-50" />
                       </td>
                       <td data-label="PIC 2" className="td">
-                        <PicCell pic={equip.pic_2} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
+                        <PicCell pic={equip.pic_2} accent="border-amber-200 text-amber-700 bg-amber-50" />
                       </td>
                       <td data-label="Status" className="td text-right">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
@@ -505,7 +524,7 @@ export default function GuestReportsPage() {
   };
 
   return (
-    <>
+    <div className="theme-light min-h-screen bg-stone-100 text-stone-800">
       <div className="p-4 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
 
@@ -513,14 +532,14 @@ export default function GuestReportsPage() {
           <div className="panel p-5 md:p-6 space-y-4">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-ink-100">Inspection Reports</h1>
-                <p className="text-xs text-ink-400 mt-0.5">
+                <h1 className="text-2xl font-bold tracking-tight text-stone-900">Inspection Reports</h1>
+                <p className="text-xs text-stone-500 mt-0.5">
                   Public guest view. Monitor safety conditions, track equipment coverage, and see which equipment is still uninspected.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {lastFetched && (
-                  <span className="text-[11px] text-ink-600 hidden md:block">
+                  <span className="text-[11px] text-stone-400 hidden md:block">
                     Updated {lastFetched.toLocaleTimeString()}
                   </span>
                 )}
@@ -553,7 +572,7 @@ export default function GuestReportsPage() {
               </div>
               <div className="w-full sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Entity</label>
-                <select value={selectedEntity} onChange={(e) => setSelectedEntity(e.target.value)} className="input text-xs">
+                <select value={selectedEntity} onChange={(e) => { const v = e.target.value; setSelectedEntity(v); if (v !== selectedEntity) setSelectedFacility('All'); }} className="input text-xs">
                   {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
                 </select>
               </div>
@@ -576,7 +595,7 @@ export default function GuestReportsPage() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-full sm:w-auto">
                 <label className="field-label text-[10px]">Month</label>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-full sm:w-40">
+                <select value={selectedMonth} onChange={(e) => { const v = e.target.value; setSelectedMonth(v); if (v !== selectedMonth) setSelectedWeek(''); }} className="input text-xs w-full sm:w-40">
                   <option value="">All Months</option>
                   {monthOptions.map((m) => (
                     <option key={m} value={m}>{m}</option>
@@ -602,7 +621,7 @@ export default function GuestReportsPage() {
                   This Month
                 </button>
                 {(selectedMonth || selectedWeek) && (
-                  <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                  <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-600 hover:text-rose-700">
                     Clear
                   </button>
                 )}
@@ -612,33 +631,33 @@ export default function GuestReportsPage() {
 
           {/* ── KPI Cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
-            <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
-            <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-400" borderColor="border-emerald-900/30" />
+            <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-stone-900" />
+            <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-600" borderColor="border-rose-200" />
+            <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-600" borderColor="border-emerald-200" />
             <KpiCard
               label="Not Inspected"
               value={notInspectedCount}
               sub={`of ${totalMasterlistCount} total equipment`}
-              color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
-              borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
+              color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
+              borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
             />
-            <KpiCard label="Pass Rate" value={`${passRate}%`} sub="Safe / inspected" color="text-sky-400" />
+            <KpiCard label="Pass Rate" value={`${passRate}%`} sub="Safe / inspected" color="text-emerald-600" />
           </div>
 
           {/* ── Tabbed Panel ── */}
           <div className="panel overflow-hidden p-0">
-            <div className="flex flex-wrap border-b border-line bg-ink-950/40">
+            <div className="flex flex-wrap border-b border-stone-200 bg-stone-50/60">
               <button
                 onClick={() => setActiveTab('uninspected')}
                 className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === 'uninspected' ? 'border-amber-500 text-amber-400' : 'border-transparent text-ink-600 hover:text-ink-300'
+                  activeTab === 'uninspected' ? 'border-amber-500 text-amber-700' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 Uninspected Equipment
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-950/80 text-amber-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500'}`}>
                   {notInspectedCount}
                 </span>
               </button>
@@ -646,7 +665,7 @@ export default function GuestReportsPage() {
               <button
                 onClick={() => setActiveTab('unsafe')}
                 className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === 'unsafe' ? 'border-rose-500 text-rose-400' : 'border-transparent text-ink-600 hover:text-ink-300'
+                  activeTab === 'unsafe' ? 'border-rose-500 text-rose-600' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -654,7 +673,7 @@ export default function GuestReportsPage() {
                   <line x1="12" y1="9" x2="12" y2="16" />
                 </svg>
                 Unsafe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-950/80 text-rose-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-100 text-rose-700' : 'bg-stone-100 text-stone-500'}`}>
                   {unsafeCount}
                 </span>
               </button>
@@ -662,14 +681,14 @@ export default function GuestReportsPage() {
               <button
                 onClick={() => setActiveTab('safe')}
                 className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === 'safe' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-ink-600 hover:text-ink-300'
+                  activeTab === 'safe' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
                 Safe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-950/80 text-emerald-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
                   {safeCount}
                 </span>
               </button>
@@ -682,13 +701,21 @@ export default function GuestReportsPage() {
                 ? renderInspectionTable(safeSlice, 'safe')
                 : renderInspectionTable(unsafeSlice, 'unsafe')}
           </div>
+
+          {/* ── Footer ── */}
+          <footer className="pt-8 border-t border-stone-200 text-center">
+            <p className="text-xs text-stone-400">
+              © 2026 Dev : <a href="https://garyyudo.site" target="_blank" rel="noopener noreferrer" className="text-stone-500 hover:text-red-800 font-medium transition-colors">Garyyudo.site</a>
+            </p>
+          </footer>
         </div>
       </div>
 
       <InspectionDetailModal
         inspection={viewingRecord}
         onClose={() => setViewingRecord(null)}
+        theme="light"
       />
-    </>
+    </div>
   );
 }

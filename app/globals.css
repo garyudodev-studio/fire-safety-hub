@@ -224,6 +224,55 @@
     }
   }
 
+  /* ---- Light theme scope (guest public view) ---- */
+  .theme-light {
+    color-scheme: light;
+  }
+  .theme-light .panel {
+    @apply bg-white border-stone-200 shadow-[0_1px_2px_rgba(28,25,23,0.04),0_8px_24px_-16px_rgba(28,25,23,0.12)];
+  }
+  .theme-light .panel-raised {
+    @apply bg-white border-stone-200;
+  }
+  .theme-light .btn-ghost {
+    @apply bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200 hover:border-stone-300;
+  }
+  .theme-light .btn-soft {
+    @apply bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 hover:text-stone-800;
+  }
+  .theme-light .icon-btn {
+    @apply bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 hover:text-stone-900;
+  }
+  .theme-light .field-label {
+    @apply text-stone-500;
+  }
+  .theme-light .input,
+  .theme-light .select {
+    @apply bg-white border-stone-300 text-stone-900 placeholder:text-stone-400
+      focus:border-red-800/70 focus:ring-4 focus:ring-red-800/10;
+  }
+  .theme-light .chip {
+    @apply border-stone-200 bg-stone-100 text-stone-600;
+  }
+  .theme-light .th {
+    @apply text-stone-500;
+  }
+  .theme-light .td {
+    @apply text-stone-600;
+  }
+  @media (max-width: 767px) {
+    .theme-light .mobile-cards tr {
+      border-color: rgba(231, 229, 228, 1) !important;
+      background: #ffffff;
+    }
+    .theme-light .mobile-cards td {
+      border-bottom-color: rgba(231, 229, 228, 1);
+    }
+    .theme-light .mobile-cards td::before {
+      color: #a8a29e;
+    }
+  }
+
   /* ---- Motion ---- */
   .animate-slide-down {
     animation: slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
