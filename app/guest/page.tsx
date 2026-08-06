@@ -3,8 +3,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface PicPerson {
+  id?: string;
+  name?: string;
+  image_profile?: string | null;
+}
 
 interface EquipmentMaster {
   id: string;
@@ -14,6 +21,8 @@ interface EquipmentMaster {
   facility: string | null;
   area: string | null;
   location: string | null;
+  pic_1?: PicPerson | null;
+  pic_2?: PicPerson | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -35,7 +44,63 @@ const EQUIPMENT_TYPES = [
   'Emergency Lamp',
 ];
 
+// Per-tab table color scheme (border line matches the active tab accent)
+const TAB_SCHEME: Record<TabKey, {
+  border: string;
+  headerBg: string;
+  divider: string;
+  hover: string;
+}> = {
+  uninspected: {
+    border: 'border-amber-900/40',
+    headerBg: 'bg-amber-950/20',
+    divider: 'divide-amber-900/20',
+    hover: 'hover:bg-amber-950/10',
+  },
+  unsafe: {
+    border: 'border-rose-900/40',
+    headerBg: 'bg-rose-950/20',
+    divider: 'divide-rose-900/20',
+    hover: 'hover:bg-rose-950/10',
+  },
+  safe: {
+    border: 'border-emerald-900/40',
+    headerBg: 'bg-emerald-950/20',
+    divider: 'divide-emerald-900/20',
+    hover: 'hover:bg-emerald-950/10',
+  },
+};
+
+// PIC cell: profile image icon + name (falls back to initial avatar)
+function PicCell({ pic, accent }: { pic?: PicPerson | null; accent: string }) {
+  if (!pic?.name) {
+    return <span className="text-[11px] italic text-ink-600">—</span>;
+  }
+  return (
+    <div className="flex items-center gap-2 min-w-0" title={pic.name}>
+      {pic.image_profile ? (
+        <ProtectedImage
+          src={pic.image_profile}
+          alt=""
+          className="h-6 w-6 flex-shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border ${accent} text-[10px] font-bold`}>
+          {pic.name[0].toUpperCase()}
+        </span>
+      )}
+      <span className="truncate text-xs text-ink-200">{pic.name}</span>
+    </div>
+  );
+}
+
 const PAGE_SIZE = 13;
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+type TabKey = 'uninspected' | 'unsafe' | 'safe';
+
+// Per-tab table color scheme (border line matches the active tab accent)
 
 function KpiCard({
   label, value, sub, color = 'text-ink-100', borderColor = '',
@@ -99,8 +164,6 @@ function Pagination({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type TabKey = 'uninspected' | 'unsafe' | 'safe';
-
 export default function GuestReportsPage() {
   const supabase = getSupabaseClient();
 
@@ -149,11 +212,11 @@ export default function GuestReportsPage() {
       const [inspRes, masterRes] = await Promise.all([
         supabase
           .from('inspections')
-          .select(`*, equipment:equipment_id(location, facility, area, entity)`)
+          .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile))`)
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location')
+          .select('id, no_id, type, entity, facility, area, location, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)')
       ]);
 
       if (!inspRes.error   && inspRes.data)    setInspections(inspRes.data as InspectionRecord[]);
@@ -255,7 +318,9 @@ export default function GuestReportsPage() {
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
-  const renderInspectionTable = (rows: InspectionRecord[], isUnsafe: boolean) => {
+  const renderInspectionTable = (rows: InspectionRecord[], scheme: TabKey) => {
+    const s = TAB_SCHEME[scheme];
+    const isUnsafe = scheme === 'unsafe';
     return (
       <div>
         {loading ? (
@@ -274,31 +339,34 @@ export default function GuestReportsPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="w-full min-w-0">
+              <table className={`w-full table-fixed border-b ${s.border}`}>
                 <thead>
-                  <tr className="border-b border-line bg-ink-950/40">
-                    <th className="th">Equipment ID</th>
-                    <th className="th">Type</th>
-                    <th className="th">Entity / Facility</th>
-                    <th className="th">Date / Period</th>
-                    <th className="th">Inspector</th>
-                    <th className="th">Remarks</th>
-                    <th className="th text-right">Detail</th>
+                  <tr className={`border-b ${s.border} ${s.headerBg}`}>
+                    <th className="th w-[12%]">Equipment ID</th>
+                    <th className="th w-[10%]">Type</th>
+                    <th className="th w-[13%]">Entity / Facility</th>
+                    <th className="th w-[12%]">Date / Period</th>
+                    <th className="th w-[11%]">PIC 1</th>
+                    <th className="th w-[11%]">PIC 2</th>
+                    <th className="th w-[6%] text-right">Detail</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className={`divide-y ${s.divider}`}>
                   {rows.map((item) => {
                     const entity   = item.equipment?.entity   ?? '';
                     const facility = item.equipment?.facility ?? '';
+                    const accent   = isUnsafe
+                      ? 'border-rose-800/50 text-rose-300 bg-rose-950/60'
+                      : 'border-emerald-800/50 text-emerald-300 bg-emerald-950/60';
                     return (
                       <tr
                         key={item.id}
                         onClick={() => setViewingRecord(item)}
-                        className={`transition-colors cursor-pointer ${isUnsafe ? 'hover:bg-rose-950/10' : 'hover:bg-emerald-950/10'}`}
+                        className={`transition-colors cursor-pointer ${s.hover}`}
                       >
                         <td className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
-                          {item.equipment_no_id}
+                          <span className="block truncate">{item.equipment_no_id}</span>
                         </td>
                         <td className="td">
                           <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
@@ -306,22 +374,24 @@ export default function GuestReportsPage() {
                           </span>
                         </td>
                         <td className="td text-xs">
-                          {entity && <div className="text-ink-200 font-medium">{entity}</div>}
-                          {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
+                          {entity && <div className="text-ink-200 font-medium truncate">{entity}</div>}
+                          {facility && <div className="text-ink-500 text-[11px] truncate">{facility}</div>}
                           {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                         </td>
                         <td className="td text-xs text-ink-300">
-                          <div>{item.inspection_date}</div>
-                          <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
+                          <div className="truncate">{item.inspection_date}</div>
+                          <div className="text-ink-500 text-[11px] truncate">{item.week} ({item.month_year})</div>
                         </td>
-                        <td className="td text-xs text-ink-200">{item.inspector_name}</td>
-                        <td className="td text-xs text-ink-400 max-w-[180px] truncate">
-                          {item.remarks || <span className="italic text-ink-600">No remarks</span>}
+                        <td className="td">
+                          <PicCell pic={item.equipment?.pic_1} accent={accent} />
+                        </td>
+                        <td className="td">
+                          <PicCell pic={item.equipment?.pic_2} accent={accent} />
                         </td>
                         <td className="td text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
-                            className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                            className={`btn btn-ghost text-xs px-3 py-1 whitespace-nowrap ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
                           >
                             Details
                           </button>
@@ -346,6 +416,7 @@ export default function GuestReportsPage() {
 
   // ★ Uninspected equipment table
   const renderUninspectedTable = () => {
+    const s = TAB_SCHEME.uninspected;
     return (
       <div>
         {loading ? (
@@ -368,36 +439,48 @@ export default function GuestReportsPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="w-full min-w-0">
+              <table className={`w-full table-fixed border-b ${s.border}`}>
                 <thead>
-                  <tr className="border-b border-line bg-ink-950/40">
-                    <th className="th">Equipment ID</th>
-                    <th className="th">Type</th>
-                    <th className="th">Entity / Facility</th>
-                    <th className="th">Area / Location</th>
-                    <th className="th text-right">Status</th>
+                  <tr className={`border-b ${s.border} ${s.headerBg}`}>
+                    <th className="th w-[16%]">Equipment ID</th>
+                    <th className="th w-[13%]">Type</th>
+                    <th className="th w-[17%]">Entity / Facility</th>
+                    <th className="th w-[16%]">Area / Location</th>
+                    <th className="th w-[13%]">PIC 1</th>
+                    <th className="th w-[13%]">PIC 2</th>
+                    <th className="th w-[12%] text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className={`divide-y ${s.divider}`}>
                   {uninspSlice.map((equip) => (
-                    <tr key={equip.id} className="transition-colors hover:bg-amber-950/10">
-                      <td className="td font-bold text-amber-300">{equip.no_id}</td>
+                    <tr key={equip.id} className={`transition-colors ${s.hover}`}>
+                      <td className="td font-bold text-amber-300">
+                        <span className="block truncate">{equip.no_id}</span>
+                      </td>
                       <td className="td">
                         <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
                           {equip.type}
                         </span>
                       </td>
                       <td className="td text-xs">
-                        {equip.entity && <div className="text-ink-200 font-medium">{equip.entity}</div>}
-                        {equip.facility && <div className="text-ink-500 text-[11px]">{equip.facility}</div>}
+                        {equip.entity && <div className="text-ink-200 font-medium truncate">{equip.entity}</div>}
+                        {equip.facility && <div className="text-ink-500 text-[11px] truncate">{equip.facility}</div>}
                         {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
                       </td>
                       <td className="td text-xs text-ink-300">
-                        {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
+                        <span className="block truncate">
+                          {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
+                        </span>
+                      </td>
+                      <td className="td">
+                        <PicCell pic={equip.pic_1} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
+                      </td>
+                      <td className="td">
+                        <PicCell pic={equip.pic_2} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
                       </td>
                       <td className="td text-right">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50 whitespace-nowrap">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
@@ -596,8 +679,8 @@ export default function GuestReportsPage() {
             {activeTab === 'uninspected'
               ? renderUninspectedTable()
               : activeTab === 'safe'
-                ? renderInspectionTable(safeSlice, false)
-                : renderInspectionTable(unsafeSlice, true)}
+                ? renderInspectionTable(safeSlice, 'safe')
+                : renderInspectionTable(unsafeSlice, 'unsafe')}
           </div>
         </div>
       </div>
