@@ -134,11 +134,11 @@ function Pagination({
   if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-line bg-ink-950/40">
+    <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 border-t border-line bg-ink-950/40 sm:flex-row">
       <span className="text-xs text-ink-500">
         {total === 0 ? '0 results' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-center gap-1">
         <button onClick={() => onChange(page - 1)} disabled={page <= 1}
           className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           ‹ Prev
@@ -340,7 +340,7 @@ export default function GuestReportsPage() {
         ) : (
           <>
             <div className="w-full min-w-0">
-              <table className={`w-full table-fixed border-b ${s.border}`}>
+              <table className={`mobile-cards w-full table-fixed border-b ${s.border}`}>
                 <thead>
                   <tr className={`border-b ${s.border} ${s.headerBg}`}>
                     <th className="th w-[12%]">Equipment ID</th>
@@ -365,30 +365,30 @@ export default function GuestReportsPage() {
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer ${s.hover}`}
                       >
-                        <td className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
+                        <td data-label="Equipment ID" className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
                           <span className="block truncate">{item.equipment_no_id}</span>
                         </td>
-                        <td className="td">
+                        <td data-label="Type" className="td">
                           <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
                             {item.equipment_type}
                           </span>
                         </td>
-                        <td className="td text-xs">
+                        <td data-label="Entity / Facility" className="td text-xs">
                           {entity && <div className="text-ink-200 font-medium truncate">{entity}</div>}
                           {facility && <div className="text-ink-500 text-[11px] truncate">{facility}</div>}
                           {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                         </td>
-                        <td className="td text-xs text-ink-300">
+                        <td data-label="Date / Period" className="td text-xs text-ink-300">
                           <div className="truncate">{item.inspection_date}</div>
                           <div className="text-ink-500 text-[11px] truncate">{item.week} ({item.month_year})</div>
                         </td>
-                        <td className="td">
+                        <td data-label="PIC 1" className="td">
                           <PicCell pic={item.equipment?.pic_1} accent={accent} />
                         </td>
-                        <td className="td">
+                        <td data-label="PIC 2" className="td">
                           <PicCell pic={item.equipment?.pic_2} accent={accent} />
                         </td>
-                        <td className="td text-right">
+                        <td data-label="Action" className="td text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
                             className={`btn btn-ghost text-xs px-3 py-1 whitespace-nowrap ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
@@ -440,7 +440,7 @@ export default function GuestReportsPage() {
         ) : (
           <>
             <div className="w-full min-w-0">
-              <table className={`w-full table-fixed border-b ${s.border}`}>
+              <table className={`mobile-cards w-full table-fixed border-b ${s.border}`}>
                 <thead>
                   <tr className={`border-b ${s.border} ${s.headerBg}`}>
                     <th className="th w-[16%]">Equipment ID</th>
@@ -455,31 +455,31 @@ export default function GuestReportsPage() {
                 <tbody className={`divide-y ${s.divider}`}>
                   {uninspSlice.map((equip) => (
                     <tr key={equip.id} className={`transition-colors ${s.hover}`}>
-                      <td className="td font-bold text-amber-300">
+                      <td data-label="Equipment ID" className="td font-bold text-amber-300">
                         <span className="block truncate">{equip.no_id}</span>
                       </td>
-                      <td className="td">
+                      <td data-label="Type" className="td">
                         <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
                           {equip.type}
                         </span>
                       </td>
-                      <td className="td text-xs">
+                      <td data-label="Entity / Facility" className="td text-xs">
                         {equip.entity && <div className="text-ink-200 font-medium truncate">{equip.entity}</div>}
                         {equip.facility && <div className="text-ink-500 text-[11px] truncate">{equip.facility}</div>}
                         {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
                       </td>
-                      <td className="td text-xs text-ink-300">
+                      <td data-label="Area / Location" className="td text-xs text-ink-300">
                         <span className="block truncate">
                           {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
                         </span>
                       </td>
-                      <td className="td">
+                      <td data-label="PIC 1" className="td">
                         <PicCell pic={equip.pic_1} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
                       </td>
-                      <td className="td">
+                      <td data-label="PIC 2" className="td">
                         <PicCell pic={equip.pic_2} accent="border-amber-800/50 text-amber-300 bg-amber-950/60" />
                       </td>
-                      <td className="td text-right">
+                      <td data-label="Status" className="td text-right">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50 whitespace-nowrap">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
@@ -542,7 +542,7 @@ export default function GuestReportsPage() {
 
             {/* Filter row 1: search, entity, facility, type */}
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[140px]">
+              <div className="w-full sm:flex-1 sm:min-w-[140px]">
                 <label className="field-label text-[10px]">Search</label>
                 <input
                   type="text" value={searchQuery}
@@ -551,19 +551,19 @@ export default function GuestReportsPage() {
                   className="input text-xs"
                 />
               </div>
-              <div className="flex-1 min-w-[120px]">
+              <div className="w-full sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Entity</label>
                 <select value={selectedEntity} onChange={(e) => setSelectedEntity(e.target.value)} className="input text-xs">
                   {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
                 </select>
               </div>
-              <div className="flex-1 min-w-[120px]">
+              <div className="w-full sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Facility</label>
                 <select value={selectedFacility} onChange={(e) => setSelectedFacility(e.target.value)} className="input text-xs">
                   {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
                 </select>
               </div>
-              <div className="flex-1 min-w-[120px]">
+              <div className="w-full sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Equipment Type</label>
                 <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="input text-xs">
                   <option value="All">All Types</option>
@@ -574,22 +574,22 @@ export default function GuestReportsPage() {
 
             {/* Filter row 2: month then week */}
             <div className="flex flex-wrap items-end gap-3">
-              <div>
+              <div className="w-full sm:w-auto">
                 <label className="field-label text-[10px]">Month</label>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-40">
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-full sm:w-40">
                   <option value="">All Months</option>
                   {monthOptions.map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="w-full sm:w-auto">
                 <label className="field-label text-[10px]">Week</label>
                 <select
                   value={selectedWeek}
                   onChange={(e) => setSelectedWeek(e.target.value)}
                   disabled={!selectedMonth}
-                  className="input text-xs w-36"
+                  className="input text-xs w-full sm:w-36"
                 >
                   <option value="">All Weeks</option>
                   {weekOptions.map((w) => (
@@ -630,7 +630,7 @@ export default function GuestReportsPage() {
             <div className="flex flex-wrap border-b border-line bg-ink-950/40">
               <button
                 onClick={() => setActiveTab('uninspected')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
                   activeTab === 'uninspected' ? 'border-amber-500 text-amber-400' : 'border-transparent text-ink-600 hover:text-ink-300'
                 }`}
               >
@@ -645,7 +645,7 @@ export default function GuestReportsPage() {
 
               <button
                 onClick={() => setActiveTab('unsafe')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
                   activeTab === 'unsafe' ? 'border-rose-500 text-rose-400' : 'border-transparent text-ink-600 hover:text-ink-300'
                 }`}
               >
@@ -661,7 +661,7 @@ export default function GuestReportsPage() {
 
               <button
                 onClick={() => setActiveTab('safe')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
                   activeTab === 'safe' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-ink-600 hover:text-ink-300'
                 }`}
               >

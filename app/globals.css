@@ -166,6 +166,64 @@
     @apply px-4 py-3 text-sm text-ink-300 whitespace-nowrap;
   }
 
+  /* Stack tables as cards on small screens (labels via data-label) */
+  @media (max-width: 767px) {
+    .mobile-cards thead {
+      display: none;
+    }
+    .mobile-cards,
+    .mobile-cards tbody,
+    .mobile-cards tr,
+    .mobile-cards td {
+      display: block;
+      width: 100%;
+    }
+    .mobile-cards {
+      border-bottom: none !important;
+    }
+    .mobile-cards tbody {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      padding: 0.625rem;
+    }
+    .mobile-cards tbody,
+    .mobile-cards tr {
+      border: none !important;
+      background: transparent;
+    }
+    .mobile-cards tr {
+      border: 1px solid var(--color-line) !important;
+      border-radius: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .mobile-cards td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px dashed var(--color-line);
+      white-space: normal;
+      text-align: right;
+      font-size: 0.8rem;
+    }
+    .mobile-cards td:last-child {
+      border-bottom: none;
+    }
+    .mobile-cards td::before {
+      content: attr(data-label);
+      flex-shrink: 0;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-ink-500);
+      text-align: left;
+    }
+  }
+
   /* ---- Motion ---- */
   .animate-slide-down {
     animation: slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);

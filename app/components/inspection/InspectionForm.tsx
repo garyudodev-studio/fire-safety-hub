@@ -62,6 +62,10 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLockedInspector, setIsLockedInspector] = useState(false);
 
+  // Tracks whether the selected equipment has already been inspected in the current month+week
+  const [duplicate, setDuplicate] = useState<{ inspector: string; date: string } | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+
   const supabase = getSupabaseClient();
 
   // Scroll to top of modal container whenever component mounts or selected equipment changes
@@ -123,6 +127,31 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
 
     loadData();
   }, [supabase]);
+
+  // Detect if the selected equipment was already inspected in the same month + week
+  useEffect(() => {
+    if (!selectedEquipment || !monthYear || !week) return;
+
+    let cancelled = false;
+    const checkDuplicate = async () => {
+      setCheckingDuplicate(true);
+      setDuplicate(null);
+      const { data } = await supabase
+        .from('inspections')
+        .select('inspector_name, inspection_date')
+        .eq('equipment_id', selectedEquipment.id)
+        .eq('month_year', monthYear)
+        .eq('week', week)
+        .maybeSingle();
+      if (!cancelled) {
+        if (data) setDuplicate({ inspector: data.inspector_name, date: data.inspection_date });
+        setCheckingDuplicate(false);
+      }
+    };
+
+    checkDuplicate();
+    return () => { cancelled = true; };
+  }, [selectedEquipment, week, monthYear, supabase]);
 
   // Unique list of facilities/factories for filter dropdown
   const uniqueFacilities = Array.from(
@@ -247,6 +276,23 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setLoading(true);
 
     try {
+      // 0. Prevent duplicate: same equipment + same month/year + same week is already inspected
+      const { data: existing } = await supabase
+        .from('inspections')
+        .select('inspector_name, inspection_date')
+        .eq('equipment_id', selectedEquipment.id)
+        .eq('month_year', monthYear)
+        .eq('week', week)
+        .maybeSingle();
+
+      if (existing) {
+        setErrorMsg(
+          `Cannot save — ${selectedEquipment.no_id} was already inspected for ${monthYear} (${week}) by ${existing.inspector_name} on ${existing.inspection_date}. Each equipment can only be inspected once per week.`
+        );
+        setLoading(false);
+        return;
+      }
+
       // 1. Upload photos to Supabase Storage `inspection_photos`
       let uploadedEquipmentPhotoUrl = equipmentPhotoUrl;
       if (equipmentPhotoUrl.startsWith('data:image')) {
@@ -320,6 +366,24 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <div>{errorMsg}</div>
+        </div>
+      )}
+
+      {selectedEquipment && duplicate && (
+        <div className="rounded-2xl border border-amber-900/60 bg-amber-950/40 p-4 text-sm text-amber-300 flex items-start gap-3 animate-fade">
+          <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div>
+            <p className="font-semibold">Already inspected this period</p>
+            <p className="text-xs mt-0.5 text-amber-400/90">
+              {selectedEquipment.no_id} was already inspected for <span className="font-semibold">{monthYear} ({week})</span> by{' '}
+              <span className="font-semibold">{duplicate.inspector}</span> on <span className="font-semibold">{duplicate.date}</span>.
+              Duplicate inspections are not allowed — change the equipment or the inspection date.
+            </p>
+          </div>
         </div>
       )}
 
@@ -724,7 +788,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
 
               <button
                 type="submit"
-                disabled={loading || !equipmentPhotoUrl || !checklistPhotoUrl}
+                disabled={loading || !equipmentPhotoUrl || !checklistPhotoUrl || !!duplicate || checkingDuplicate}
                 className="btn btn-primary text-xs px-6 py-2.5 flex items-center justify-center gap-2 w-full md:w-auto"
               >
                 {loading ? (
@@ -732,6 +796,10 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     Submitting...
                   </>
+                ) : !equipmentPhotoUrl || !checklistPhotoUrl ? (
+                  'Complete & Save Inspection'
+                ) : duplicate ? (
+                  'Already Inspected — Save Blocked'
                 ) : (
                   'Complete & Save Inspection'
                 )}
