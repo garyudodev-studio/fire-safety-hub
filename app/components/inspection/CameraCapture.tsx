@@ -27,8 +27,42 @@ export default function CameraCapture({
     fileInputRef.current?.click();
   };
 
-  // Draw the captured photo onto a canvas and stamp a date/time overlay,
-  // then export the result as a JPEG data URL.
+  const MAX_PHOTO_BYTES = 50 * 1024; // 50 KB target per captured photo
+  const BASE_DIM = 1280;
+  const BASE_QUALITY = 0.75;
+  const MIN_QUALITY = 0.45;
+
+  // Draw onto the canvas (with timestamp overlay) and encode as JPEG.
+  const encodeWithTimestamp = (
+    img: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    w: number,
+    h: number,
+    quality: number
+  ): string => {
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.drawImage(img, 0, 0, w, h);
+
+    // Timestamp overlay
+    const timestamp = new Date().toLocaleString();
+    const fontSize = Math.max(10, Math.round(h * 0.03));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tw = ctx.measureText(timestamp).width;
+    const boxH = fontSize + 20;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillRect(12, h - boxH - 12, tw + 24, boxH);
+    ctx.fillStyle = 'white';
+    ctx.fillText(timestamp, 24, h - 18);
+
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
+  // Draw the captured photo onto a canvas, stamp a date/time overlay, and
+  // export a JPEG data URL no larger than 50KB while keeping quality usable.
   const processWithTimestamp = (file: File) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
@@ -38,28 +72,28 @@ export default function CameraCapture({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const MAX_DIM = 1600;
-        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
+        const scale = Math.min(1, BASE_DIM / Math.max(img.width, img.height));
+        let w = Math.max(1, Math.round(img.width * scale));
+        let h = Math.max(1, Math.round(img.height * scale));
+        let quality = BASE_QUALITY;
+        let dataUrl = '';
 
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        for (let attempt = 0; attempt < 12; attempt++) {
+          dataUrl = encodeWithTimestamp(img, canvas, w, h, quality);
+          // Estimate byte size from base64 string length (≈3 bytes per 4 chars)
+          if (dataUrl.length * 0.75 <= MAX_PHOTO_BYTES) break;
 
-          // Timestamp overlay
-          const timestamp = new Date().toLocaleString();
-          const fontSize = Math.max(16, Math.round(canvas.height * 0.03));
-          ctx.font = `bold ${fontSize}px sans-serif`;
-          const tw = ctx.measureText(timestamp).width;
-          const boxH = fontSize + 20;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-          ctx.fillRect(12, canvas.height - boxH - 12, tw + 24, boxH);
-          ctx.fillStyle = 'white';
-          ctx.fillText(timestamp, 24, canvas.height - 18);
-
-          onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.85));
+          if (quality > MIN_QUALITY) {
+            quality -= 0.05; // reduce compression quality before shrinking
+          } else {
+            // still over budget — downscale the image itself
+            w = Math.max(320, Math.round(w * 0.8));
+            h = Math.max(240, Math.round(h * 0.8));
+            quality = BASE_QUALITY;
+          }
         }
+
+        if (dataUrl) onPhotoCaptured(dataUrl);
       } catch {
         setReadError('Failed to process the captured photo. Please try again.');
       } finally {
