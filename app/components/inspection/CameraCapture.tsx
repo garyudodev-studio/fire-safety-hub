@@ -20,10 +20,61 @@ export default function CameraCapture({
   const [isReading, setIsReading] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const openCamera = () => {
     setReadError(null);
     fileInputRef.current?.click();
+  };
+
+  // Draw the captured photo onto a canvas and stamp a date/time overlay,
+  // then export the result as a JPEG data URL.
+  const processWithTimestamp = (file: File) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      try {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const MAX_DIM = 1600;
+        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Timestamp overlay
+          const timestamp = new Date().toLocaleString();
+          const fontSize = Math.max(16, Math.round(canvas.height * 0.03));
+          ctx.font = `bold ${fontSize}px sans-serif`;
+          const tw = ctx.measureText(timestamp).width;
+          const boxH = fontSize + 20;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          ctx.fillRect(12, canvas.height - boxH - 12, tw + 24, boxH);
+          ctx.fillStyle = 'white';
+          ctx.fillText(timestamp, 24, canvas.height - 18);
+
+          onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.85));
+        }
+      } catch {
+        setReadError('Failed to process the captured photo. Please try again.');
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+        setIsReading(false);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setReadError('Failed to read the captured photo. Please try again.');
+      setIsReading(false);
+    };
+
+    img.src = objectUrl;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,17 +89,7 @@ export default function CameraCapture({
     }
     setIsReading(true);
     setReadError(null);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      onPhotoCaptured(reader.result as string);
-      setIsReading(false);
-    };
-    reader.onerror = () => {
-      setReadError('Failed to read the captured photo. Please try again.');
-      setIsReading(false);
-    };
-    reader.readAsDataURL(file);
+    processWithTimestamp(file);
   };
 
   return (
@@ -61,6 +102,9 @@ export default function CameraCapture({
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {/* Hidden canvas used to stamp the date/time onto the captured photo */}
+      <canvas ref={canvasRef} className="hidden" />
 
       <div className="space-y-3">
         {/* Label row */}
