@@ -551,7 +551,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                                   ? 'bg-sky-600/20 text-sky-300 border-sky-500/50 shadow-md shadow-sky-950/40'
                                   : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
                               }`}
-                              title="Tidak memiliki lampu exit / Not Applicable"
+                              title="Tidak memiliki komponen ini / Not Applicable"
                             >
                               <span>—</span> TIDAK ADA / N/A
                             </button>
