@@ -40,7 +40,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentItem | null>(null);
   
   const [checklist, setChecklist] = useState<EquipmentChecklist | null>(null);
-  const [answers, setAnswers] = useState<Record<string, 'YES' | 'NO'>>({});
+  const [answers, setAnswers] = useState<Record<string, 'YES' | 'NO' | 'NA'>>({});
   
   const [equipmentPhotoUrl, setEquipmentPhotoUrl] = useState<string | null>(null);
   const [checklistPhotoUrl, setChecklistPhotoUrl] = useState<string | null>(null);
@@ -156,7 +156,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     }
 
     // Reset answers to expected normal answer (YES or NO)
-    const initialAnswers: Record<string, 'YES' | 'NO'> = {};
+    const initialAnswers: Record<string, 'YES' | 'NO' | 'NA'> = {};
     cl.sections.forEach((section) => {
       section.items.forEach((checklistItem) => {
         initialAnswers[checklistItem.id] = checklistItem.expectedAnswer || 'YES';
@@ -186,13 +186,13 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setSearchQuery('');
   };
 
-  const handleAnswerChange = (itemId: string, value: 'YES' | 'NO') => {
+  const handleAnswerChange = (itemId: string, value: 'YES' | 'NO' | 'NA') => {
     setAnswers((prev) => ({ ...prev, [itemId]: value }));
   };
 
   const handleMarkAllNormal = () => {
     if (!checklist) return;
-    const allNormal: Record<string, 'YES' | 'NO'> = {};
+    const allNormal: Record<string, 'YES' | 'NO' | 'NA'> = {};
     checklist.sections.forEach((sec) => {
       sec.items.forEach((item) => {
         allNormal[item.id] = item.expectedAnswer || 'YES';
@@ -201,12 +201,14 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setAnswers(allNormal);
   };
 
-  // Check if all items match their expected normal answer
+  // Check if all items match their expected normal answer ('NA' counts as normal when allowed)
   const isAllPass = checklist
     ? checklist.sections.every((sec) =>
         sec.items.every((item) => {
           const expected = item.expectedAnswer || 'YES';
-          return answers[item.id] === expected;
+          const value = answers[item.id];
+          if (item.allowNA && value === 'NA') return true;
+          return value === expected;
         })
       )
     : false;
@@ -508,7 +510,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                         </div>
 
                         {/* Yes / No Toggle Buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {/* YES Button */}
                           <button
                             type="button"
@@ -538,6 +540,22 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                           >
                             <span>{!isYesNormal ? '✓' : '✕'}</span> TIDAK / NO {!isYesNormal ? '(Normal)' : '(Defect)'}
                           </button>
+
+                          {/* NA Button (only for items that allow "Not Applicable", e.g. Emergency Lamp without an exit lamp) */}
+                          {item.allowNA && (
+                            <button
+                              type="button"
+                              onClick={() => handleAnswerChange(item.id, 'NA')}
+                              className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                                currentVal === 'NA'
+                                  ? 'bg-sky-600/20 text-sky-300 border-sky-500/50 shadow-md shadow-sky-950/40'
+                                  : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
+                              }`}
+                              title="Tidak memiliki lampu exit / Not Applicable"
+                            >
+                              <span>—</span> TIDAK ADA / N/A
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

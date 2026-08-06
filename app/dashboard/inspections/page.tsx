@@ -15,7 +15,6 @@ function getTypeBadgeColor(type: string): string {
     case 'Fire Hydrant': return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
     case 'Fire Extinguisher': return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
     case 'Emergency Lamp': return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-    case 'Emergency Exit Lamp': return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
     default: return 'bg-white/[0.04] text-ink-300 border-line';
   }
 }
@@ -310,7 +309,6 @@ export default function InspectionsPage() {
                   <option value="Fire Alarm">Fire Alarm</option>
                   <option value="Fire Hydrant">Fire Hydrant</option>
                   <option value="Emergency Lamp">Emergency Lamp</option>
-                  <option value="Emergency Exit Lamp">Emergency Exit Lamp</option>
                 </select>
               </div>
 

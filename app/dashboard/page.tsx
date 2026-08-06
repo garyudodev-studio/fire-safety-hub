@@ -87,8 +87,7 @@ function getFormTemplate(type: string): string {
         case 'Fire Alarm': return '/form_checklist/form checklist_fire alarm.html';
         case 'Fire Hydrant': return '/form_checklist/form checklist_fire hydrant.html';
         case 'Fire Extinguisher': return '/form_checklist/form checklist_fire extinguishers.html';
-        case 'Emergency Lamp':
-        case 'Emergency Exit Lamp': return '/form_checklist/form checklist_emergency lamp.html';
+        case 'Emergency Lamp': return '/form_checklist/form checklist_emergency lamp.html';
         default: return '/form_checklist/form checklist_fire alarm.html';
     }
 }
@@ -99,7 +98,6 @@ function getTypeBadgeColor(type: string): string {
         case 'Fire Hydrant': return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
         case 'Fire Extinguisher': return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
         case 'Emergency Lamp': return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-        case 'Emergency Exit Lamp': return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
         default: return 'bg-white/[0.04] text-ink-300 border-line';
     }
 }
@@ -1257,7 +1255,6 @@ export default function AdminDashboard() {
                                     <option value="Fire Alarm">Fire Alarm</option>
                                     <option value="Fire Hydrant">Fire Hydrant</option>
                                     <option value="Emergency Lamp">Emergency Lamp</option>
-                                    <option value="Emergency Exit Lamp">Emergency Exit Lamp</option>
                                     <option value="Fire Extinguisher">Fire Extinguisher</option>
                                 </select>
                                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-500">

@@ -239,7 +239,7 @@ export default function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all ${
+              className={`flex flex-col items-center gap-1 py-1.5 px-2 rounded-xl transition-all ${
                 isActive
                   ? 'text-ember-400 font-semibold'
                   : 'text-ink-500 hover:text-ink-300'
@@ -248,7 +248,7 @@ export default function Sidebar() {
               <div className={`p-1 rounded-lg ${isActive ? 'bg-ember-600/15 border border-ember-900/40' : ''}`}>
                 {item.icon}
               </div>
-              <span className="text-[10px] tracking-tight">{item.name}</span>
+              <span className="text-[10px] tracking-tight leading-none">{item.name}</span>
             </Link>
           );
         })}
@@ -256,12 +256,12 @@ export default function Sidebar() {
         {/* Mobile user / sign out */}
         <button
           onClick={handleSignOut}
-          className="flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-rose-400 hover:text-rose-300 transition-all"
+          className="flex flex-col items-center gap-1 py-1.5 px-2 rounded-xl text-rose-400 hover:text-rose-300 transition-all"
         >
           <div className="p-1 rounded-lg">
             <LogOutIcon />
           </div>
-          <span className="text-[10px] tracking-tight">Sign Out</span>
+          <span className="text-[10px] tracking-tight leading-none">Sign Out</span>
         </button>
       </nav>
     </>

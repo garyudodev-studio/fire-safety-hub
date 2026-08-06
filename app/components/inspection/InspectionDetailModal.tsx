@@ -13,7 +13,7 @@ export interface InspectionRecord {
   inspection_date: string;
   week: string;
   month_year: string;
-  answers: Record<string, 'YES' | 'NO'>;
+  answers: Record<string, 'YES' | 'NO' | 'NA'>;
   status: 'PASS' | 'NEEDS_ATTENTION' | string;
   photo_url: string;
   remarks?: string | null;
@@ -203,7 +203,9 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
                     {section.items.map((item) => {
                       const answer = inspection.answers[item.id];
                       const expected = item.expectedAnswer || 'YES';
-                      const isNormal = answer === expected;
+                      const isNormal = item.allowNA && answer === 'NA'
+                        ? true
+                        : answer === expected;
                       return (
                         <div
                           key={item.id}
@@ -223,7 +225,7 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
                                 : 'bg-rose-950/80 text-rose-300 border border-rose-900/60'
                             }`}
                           >
-                            {answer === 'YES' ? 'YA / YES' : 'TIDAK / NO'} ({isNormal ? 'Normal' : 'Defect'})
+                            {answer === 'YES' ? 'YA / YES' : answer === 'NA' ? 'TIDAK ADA / N/A' : 'TIDAK / NO'} ({isNormal ? 'Normal' : 'Defect'})
                           </span>
                         </div>
                       );

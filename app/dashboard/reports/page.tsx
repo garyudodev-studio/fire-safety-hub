@@ -14,6 +14,7 @@ interface EquipmentMaster {
   entity: string | null;
   facility: string | null;
   area: string | null;
+  location: string | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -24,7 +25,6 @@ function getTypeBadgeColor(type: string): string {
     case 'Fire Hydrant':        return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
     case 'Fire Extinguisher':   return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
     case 'Emergency Lamp':      return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-    case 'Emergency Exit Lamp': return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
     default:                    return 'bg-white/[0.04] text-ink-300 border-line';
   }
 }
@@ -34,7 +34,6 @@ const TYPE_COLORS: Record<string, string> = {
   'Fire Alarm':          '#ef4444',
   'Fire Hydrant':        '#38bdf8',
   'Emergency Lamp':      '#fbbf24',
-  'Emergency Exit Lamp': '#34d399',
 };
 
 const EQUIPMENT_TYPES = [
@@ -42,7 +41,6 @@ const EQUIPMENT_TYPES = [
   'Fire Alarm',
   'Fire Hydrant',
   'Emergency Lamp',
-  'Emergency Exit Lamp',
 ];
 
 const PAGE_SIZE = 13;
@@ -305,7 +303,7 @@ function Pagination({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type TabKey = 'unsafe' | 'safe';
+type TabKey = 'uninspected' | 'unsafe' | 'safe';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -326,9 +324,10 @@ export default function ReportsPage() {
   const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   // Tab & pagination
-  const [activeTab,   setActiveTab]   = useState<TabKey>('unsafe');
+  const [activeTab,   setActiveTab]   = useState<TabKey>('uninspected');
   const [unsafePage,  setUnsafePage]  = useState(1);
   const [safePage,    setSafePage]    = useState(1);
+  const [uninspPage,  setUninspPage]  = useState(1);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   // ── Derived filter options from masterlist ──
@@ -362,7 +361,7 @@ export default function ReportsPage() {
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area'),
+          .select('id, no_id, type, entity, facility, area, location'),
         supabase
           .from('profiles')
           .select('role, entity, facility, pic:pic_id(entity, facility)')
@@ -434,6 +433,13 @@ export default function ReportsPage() {
   const inspectedCount = uniqueInspectedSet.size;
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
+  // ★ Uninspected equipment list from the masterlist
+  const uninspectedRows = useMemo(() => {
+    return filteredMasterlist
+      .filter((e) => !uniqueInspectedSet.has(e.no_id))
+      .sort((a, b) => a.no_id.localeCompare(b.no_id));
+  }, [filteredMasterlist, uniqueInspectedSet]);
+
   // Reset pages when filters change
   const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
   const [prevFilterSignature, setPrevFilterSignature] = useState(filterSignature);
@@ -441,6 +447,7 @@ export default function ReportsPage() {
     setPrevFilterSignature(filterSignature);
     setUnsafePage(1);
     setSafePage(1);
+    setUninspPage(1);
   }
   // Reset facility when entity changes
   const [prevEntity, setPrevEntity] = useState(selectedEntity);
@@ -458,6 +465,7 @@ export default function ReportsPage() {
   // ── Pagination slices ──
   const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
   const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
+  const uninspSlice = useMemo(() => uninspectedRows.slice((uninspPage - 1) * PAGE_SIZE, uninspPage * PAGE_SIZE), [uninspectedRows, uninspPage]);
 
   const setThisMonth = () => {
     const now = new Date();
@@ -512,9 +520,9 @@ export default function ReportsPage() {
                   {rows.map((item) => {
                     const entity   = item.equipment?.entity   ?? '';
                     const facility = item.equipment?.facility ?? '';
-                    return (
-                      <tr
-                        key={item.id}
+  return (
+    <tr
+      key={item.id}
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer ${isUnsafe ? 'hover:bg-rose-950/10' : 'hover:bg-emerald-950/10'}`}
                       >
@@ -558,6 +566,83 @@ export default function ReportsPage() {
               page={page}
               pageSize={PAGE_SIZE}
               onChange={setPage}
+            />
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ★ Uninspected equipment table
+  const renderUninspectedTable = () => {
+    return (
+      <div>
+        {loading ? (
+          <div className="py-20 text-center text-ink-500 flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-700 border-t-ember-500" />
+            <p className="text-sm">Loading equipment…</p>
+          </div>
+        ) : uninspSlice.length === 0 ? (
+          <div className="py-16 text-center text-ink-500">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-emerald-950/50 text-emerald-400">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="text-sm">
+              {notInspectedCount === 0
+                ? 'All equipment in the masterlist has been inspected. No pending items.'
+                : 'No uninspected equipment match your filters.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line bg-ink-950/40">
+                    <th className="th">Equipment ID</th>
+                    <th className="th">Type</th>
+                    <th className="th">Entity / Facility</th>
+                    <th className="th">Area / Location</th>
+                    <th className="th text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {uninspSlice.map((equip) => (
+                    <tr key={equip.id} className="transition-colors hover:bg-amber-950/10">
+                      <td className="td font-bold text-amber-300">{equip.no_id}</td>
+                      <td className="td">
+                        <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
+                          {equip.type}
+                        </span>
+                      </td>
+                      <td className="td text-xs">
+                        {equip.entity && <div className="text-ink-200 font-medium">{equip.entity}</div>}
+                        {equip.facility && <div className="text-ink-500 text-[11px]">{equip.facility}</div>}
+                        {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
+                      </td>
+                      <td className="td text-xs text-ink-300">
+                        {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
+                      </td>
+                      <td className="td text-right">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          Not Inspected
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={uninspectedRows.length}
+              page={uninspPage}
+              pageSize={PAGE_SIZE}
+              onChange={setUninspPage}
             />
           </>
         )}
@@ -699,7 +784,22 @@ export default function ReportsPage() {
           {/* ── Tabbed Table ── */}
           <div className="panel overflow-hidden p-0">
             {/* Tab bar */}
-            <div className="flex border-b border-line bg-ink-950/40">
+            <div className="flex overflow-x-auto border-b border-line bg-ink-950/40">
+              <button
+                onClick={() => setActiveTab('uninspected')}
+                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'uninspected' ? 'border-amber-500 text-amber-400' : 'border-transparent text-ink-500 hover:text-ink-300'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                Uninspected Equipment
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-950/80 text-amber-300' : 'bg-ink-800 text-ink-500'}`}>
+                  {notInspectedCount}
+                </span>
+              </button>
+
               <button
                 onClick={() => setActiveTab('unsafe')}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -734,14 +834,24 @@ export default function ReportsPage() {
             </div>
 
             <div className={`px-5 py-3 text-xs font-semibold uppercase tracking-wider border-b border-line ${
-              activeTab === 'unsafe' ? 'text-rose-400 bg-rose-950/10' : 'text-emerald-400 bg-emerald-950/10'
+              activeTab === 'uninspected'
+                ? 'text-amber-400 bg-amber-950/10'
+                : activeTab === 'unsafe'
+                  ? 'text-rose-400 bg-rose-950/10'
+                  : 'text-emerald-400 bg-emerald-950/10'
             }`}>
-              {activeTab === 'unsafe' ? '⚠️ Requires immediate follow-up' : '✅ Equipment in safe condition'}
+              {activeTab === 'uninspected'
+                ? '⚠️ Masterlist equipment not yet inspected'
+                : activeTab === 'unsafe'
+                  ? '⚠️ Requires immediate follow-up'
+                  : '✅ Equipment in safe condition'}
             </div>
 
-            {activeTab === 'unsafe'
-              ? renderTable(unsafeSlice, 'unsafe', unsafePage, setUnsafePage)
-              : renderTable(safeSlice,   'safe',   safePage,   setSafePage)}
+            {activeTab === 'uninspected'
+              ? renderUninspectedTable()
+              : activeTab === 'unsafe'
+                ? renderTable(unsafeSlice, 'unsafe', unsafePage, setUnsafePage)
+                : renderTable(safeSlice,   'safe',   safePage,   setSafePage)}
           </div>
         </div>
       </div>

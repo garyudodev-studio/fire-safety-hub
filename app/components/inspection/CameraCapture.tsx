@@ -224,7 +224,7 @@ export default function CameraCapture({
           disabled={isSnapping}
           className="
             flex items-center justify-center
-            w-18 h-18 sm:w-20 sm:h-20 rounded-full
+            w-16 h-16 sm:w-20 sm:h-20 rounded-full
             bg-white
             border-4 border-white/40
             shadow-2xl shadow-ember-950/80
@@ -233,7 +233,7 @@ export default function CameraCapture({
           "
           title="Take Photo"
         >
-          <span className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white border-4 border-black/10" />
+          <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-white border-4 border-black/10" />
         </button>
 
         <button
