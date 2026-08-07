@@ -201,7 +201,7 @@ export default function InspectionDetailModal({ inspection, onClose, theme = 'da
         {/* Modal Content */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {/* Metadata Grid */}
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl border text-xs ${T.metaCard}`}>
+          <div className={`grid grid-cols-2 md:grid-cols-5 gap-4 p-4 rounded-2xl border text-xs ${T.metaCard}`}>
             <div>
               <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Inspector</span>
               <span className={`${T.metaValue} font-medium`}>{inspection.inspector_name}</span>
@@ -213,6 +213,12 @@ export default function InspectionDetailModal({ inspection, onClose, theme = 'da
             <div>
               <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Period</span>
               <span className={`${T.metaValue} font-medium`}>{inspection.week} ({inspection.month_year})</span>
+            </div>
+            <div>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Area / Location</span>
+              <span className={`${T.metaValue} font-medium`}>
+                {[inspection.equipment?.area, inspection.equipment?.location].filter(Boolean).join(' · ') || (inspection.equipment?.area || '—')}
+              </span>
             </div>
             <div>
               <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Form Doc No.</span>

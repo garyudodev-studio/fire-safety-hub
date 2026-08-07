@@ -169,6 +169,8 @@ function TypeBreakdown({
   masterlist: EquipmentMaster[];
   periodText: string;
 }) {
+  const [collapsed, setCollapsed] = useState(true);
+
   const inspectedIds = new Set(inspections.map((i) => i.equipment_id));
   const totalMasterlistAll = masterlist.length;
   const uniqueAllInspected = masterlist.filter((e) => inspectedIds.has(e.id)).length;
@@ -201,17 +203,29 @@ function TypeBreakdown({
   return (
     <div className="panel p-5 space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-stone-200 pb-3">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800 flex items-center gap-2">
-            Equipment Coverage Breakdown
-            <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 font-mono">
-              Period: {periodText}
-            </span>
-          </h3>
-          <p className="text-xs text-stone-500 mt-1">
-            Masterlist total: <strong className="text-stone-900">{totalMasterlistAll}</strong> equipment · Inspected: <strong className="text-sky-700">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="group flex items-center gap-2 text-left"
+          aria-expanded={!collapsed}
+        >
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-stone-100 text-stone-600 transition-transform duration-300 ${collapsed ? '' : 'rotate-180'}`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800 flex items-center gap-2">
+              Equipment Coverage Breakdown
+              <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 font-mono">
+                Period: {periodText}
+              </span>
+            </h3>
+            <p className="text-xs text-stone-500 mt-1">
+              Masterlist total: <strong className="text-stone-900">{totalMasterlistAll}</strong> equipment · Inspected: <strong className="text-sky-700">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
+            </p>
+          </div>
+        </button>
 
         <div>
           {overallPending === 0 ? (
@@ -232,76 +246,80 @@ function TypeBreakdown({
         </div>
       </div>
 
-      <div className="space-y-4 pt-1">
-        {rows.map((r) => {
-          const col = TYPE_COLORS[r.type] ?? '#8b91a0';
-          const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
-          const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
-          const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
+      {!collapsed && (
+        <>
+          <div className="space-y-4 pt-1">
+            {rows.map((r) => {
+              const col = TYPE_COLORS[r.type] ?? '#8b91a0';
+              const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
+              const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
+              const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
 
-          return (
-            <div key={r.type} className="space-y-1.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
-                <span className="text-stone-800 font-semibold truncate">{r.type}</span>
-                <div className="flex flex-wrap items-center gap-2 shrink-0 text-stone-500">
-                  <span className="bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
-                    Inspected: <strong className="text-stone-900">{r.inspectedCount}</strong> / <span className="text-stone-600">{r.totalEquip} Masterlist Total</span>
-                  </span>
-                  {r.passRate !== null && (
-                    <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
-                  )}
-                  {r.notInspected > 0 ? (
-                    <span className="text-amber-700 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px]">
-                      {r.notInspected} Not Yet Inspected
+              return (
+                <div key={r.type} className="space-y-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+                    <span className="text-stone-800 font-semibold truncate">{r.type}</span>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-stone-500">
+                      <span className="bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                        Inspected: <strong className="text-stone-900">{r.inspectedCount}</strong> / <span className="text-stone-600">{r.totalEquip} Masterlist Total</span>
+                      </span>
+                      {r.passRate !== null && (
+                        <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
+                      )}
+                      {r.notInspected > 0 ? (
+                        <span className="text-amber-700 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px]">
+                          {r.notInspected} Not Yet Inspected
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px]">
+                          ✓ Complete
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative h-3 rounded-full bg-stone-200 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                      style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
+                    />
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                      style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-stone-500">
+                    <span>
+                      {r.coverage}% of total masterlist equipment inspected in this period
                     </span>
-                  ) : (
-                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px]">
-                      ✓ Complete
-                    </span>
-                  )}
+                    {r.notInspected > 0 && (
+                      <span className="text-amber-600">
+                        {r.notInspected} equipment remaining for this period
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              );
+            })}
+          </div>
 
-              <div className="relative h-3 rounded-full bg-stone-200 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
-                />
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-stone-500">
-                <span>
-                  {r.coverage}% of total masterlist equipment inspected in this period
-                </span>
-                {r.notInspected > 0 && (
-                  <span className="text-amber-600">
-                    {r.notInspected} equipment remaining for this period
-                  </span>
-                )}
+          {overallPending > 0 && (
+            <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-800 flex items-start gap-2.5">
+              <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <div>
+                <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
+                <p className="mt-0.5 text-amber-700/80">
+                  <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
+                  Ensure all equipment items receive inspection.
+                </p>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {overallPending > 0 && (
-        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-800 flex items-start gap-2.5">
-          <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <div>
-            <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
-            <p className="mt-0.5 text-amber-700/80">
-              <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
-              Ensure all equipment items receive inspection.
-            </p>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -579,12 +597,13 @@ function GuestReportsInner() {
               <table className={`mobile-cards w-full table-fixed border-b ${s.border}`}>
                 <thead>
                   <tr className={`border-b ${s.border} ${s.headerBg}`}>
-                    <th className="th w-[12%]">Equipment ID</th>
-                    <th className="th w-[10%]">Type</th>
-                    <th className="th w-[13%]">Entity / Facility</th>
-                    <th className="th w-[12%]">Date / Period</th>
-                    <th className="th w-[11%]">PIC 1</th>
-                    <th className="th w-[11%]">PIC 2</th>
+                    <th className="th w-[11%]">Equipment ID</th>
+                    <th className="th w-[9%]">Type</th>
+                    <th className="th w-[12%]">Entity / Facility</th>
+                    <th className="th w-[13%]">Area / Location</th>
+                    <th className="th w-[11%]">Date / Period</th>
+                    <th className="th w-[10%]">PIC 1</th>
+                    <th className="th w-[10%]">PIC 2</th>
                     <th className="th w-[6%] text-right">Detail</th>
                   </tr>
                 </thead>
@@ -613,6 +632,11 @@ function GuestReportsInner() {
                           {entity && <div className="text-stone-800 font-medium truncate">{entity}</div>}
                           {facility && <div className="text-stone-500 text-[11px] truncate">{facility}</div>}
                           {!entity && !facility && <span className="text-stone-400 italic">—</span>}
+                        </td>
+                        <td data-label="Area / Location" className="td text-xs text-stone-600">
+                          <span className="block truncate">
+                            {[item.equipment?.area, item.equipment?.location].filter(Boolean).join(' · ') || (item.equipment?.area || '—')}
+                          </span>
                         </td>
                         <td data-label="Date / Period" className="td text-xs text-stone-600">
                           <div className="truncate">{item.inspection_date}</div>
