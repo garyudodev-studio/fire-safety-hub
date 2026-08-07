@@ -45,6 +45,21 @@ const EQUIPMENT_TYPES = [
   'Emergency Lamp',
 ];
 
+const TYPE_COLORS: Record<string, string> = {
+  'Fire Extinguisher':   '#f97316',
+  'Fire Alarm':          '#ef4444',
+  'Fire Hydrant':        '#38bdf8',
+  'Emergency Lamp':      '#fbbf24',
+};
+
+function formatMonthYear(monthYear: string): string {
+  const [mm, yyyy] = monthYear.split('/');
+  const monthNum = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
+  return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
+}
+
 // Per-tab table color scheme (border line matches the active tab accent)
 const TAB_SCHEME: Record<TabKey, {
   border: string;
@@ -141,6 +156,153 @@ function PassRateRing({ rate }: { rate: number }) {
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
       <span className="text-xs text-stone-500">Health score</span>
+    </div>
+  );
+}
+
+function TypeBreakdown({
+  inspections,
+  masterlist,
+  periodText,
+}: {
+  inspections: InspectionRecord[];
+  masterlist: EquipmentMaster[];
+  periodText: string;
+}) {
+  const inspectedIds = new Set(inspections.map((i) => i.equipment_id));
+  const totalMasterlistAll = masterlist.length;
+  const uniqueAllInspected = masterlist.filter((e) => inspectedIds.has(e.id)).length;
+  const overallPending = Math.max(0, totalMasterlistAll - uniqueAllInspected);
+  const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueAllInspected / totalMasterlistAll) * 100) : 0;
+
+  const rows = EQUIPMENT_TYPES.map((t) => {
+    const typeMaster  = masterlist.filter((e) => e.type === t);
+    const totalEquip  = typeMaster.length;
+    const typeInspected = typeMaster.filter((e) => inspectedIds.has(e.id));
+    const inspectedCount = typeInspected.length;
+    const passCount = typeInspected.filter((e) =>
+      inspections.some((i) => i.equipment_id === e.id && i.status === 'PASS')
+    ).length;
+    const notInspected = Math.max(0, totalEquip - inspectedCount);
+    const passRate = inspectedCount > 0 ? Math.round((passCount / inspectedCount) * 100) : null;
+    const coverage = totalEquip > 0 ? Math.round((inspectedCount / totalEquip) * 100) : null;
+
+    return { type: t, totalEquip, inspectedCount, passCount, notInspected, passRate, coverage };
+  }).filter((r) => r.totalEquip > 0 || r.inspectedCount > 0);
+
+  if (rows.length === 0) return (
+    <div className="panel p-5 flex items-center justify-center text-stone-500 text-sm">
+      No equipment data available
+    </div>
+  );
+
+  const maxEquip = Math.max(...rows.map((r) => Math.max(r.totalEquip, 1)));
+
+  return (
+    <div className="panel p-5 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-stone-200 pb-3">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800 flex items-center gap-2">
+            Equipment Coverage Breakdown
+            <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 font-mono">
+              Period: {periodText}
+            </span>
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            Masterlist total: <strong className="text-stone-900">{totalMasterlistAll}</strong> equipment · Inspected: <strong className="text-sky-700">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
+          </p>
+        </div>
+
+        <div>
+          {overallPending === 0 ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              100% Fully Inspected
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {overallPending} Equipment Pending Inspection
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 pt-1">
+        {rows.map((r) => {
+          const col = TYPE_COLORS[r.type] ?? '#8b91a0';
+          const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
+          const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
+          const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
+
+          return (
+            <div key={r.type} className="space-y-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+                <span className="text-stone-800 font-semibold truncate">{r.type}</span>
+                <div className="flex flex-wrap items-center gap-2 shrink-0 text-stone-500">
+                  <span className="bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                    Inspected: <strong className="text-stone-900">{r.inspectedCount}</strong> / <span className="text-stone-600">{r.totalEquip} Masterlist Total</span>
+                  </span>
+                  {r.passRate !== null && (
+                    <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
+                  )}
+                  {r.notInspected > 0 ? (
+                    <span className="text-amber-700 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px]">
+                      {r.notInspected} Not Yet Inspected
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px]">
+                      ✓ Complete
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative h-3 rounded-full bg-stone-200 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                  style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
+                />
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                  style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-stone-500">
+                <span>
+                  {r.coverage}% of total masterlist equipment inspected in this period
+                </span>
+                {r.notInspected > 0 && (
+                  <span className="text-amber-600">
+                    {r.notInspected} equipment remaining for this period
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {overallPending > 0 && (
+        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-800 flex items-start gap-2.5">
+          <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
+            <p className="mt-0.5 text-amber-700/80">
+              <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
+              Ensure all equipment items receive inspection.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -324,6 +486,12 @@ function GuestReportsInner() {
   const safeCount   = safeRows.length;
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
+
+  const periodText = useMemo(() => {
+    if (selectedMonth && selectedWeek) return `Week ${selectedWeek} · ${formatMonthYear(selectedMonth)}`;
+    if (selectedMonth)                 return formatMonthYear(selectedMonth);
+    return 'All Recorded Dates';
+  }, [selectedMonth, selectedWeek]);
 
   // ── Coverage / "Not inspected" ──
   // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
@@ -691,6 +859,15 @@ function GuestReportsInner() {
               borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
             />
             <PassRateRing rate={passRate} />
+          </div>
+
+          {/* ── Equipment Coverage Breakdown ── */}
+          <div className="mt-6">
+            <TypeBreakdown
+              inspections={scopeInspections}
+              masterlist={filteredMasterlist}
+              periodText={periodText}
+            />
           </div>
 
           {/* ── Tabbed Panel ── */}

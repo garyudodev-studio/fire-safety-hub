@@ -115,23 +115,27 @@ function TypeBreakdown({
   masterlist: EquipmentMaster[];
   periodText: string;
 }) {
+  // Match inspected equipment by the real primary key and intersect with the masterlist,
+  // so orphans / duplicate inspection rows never inflate coverage or pending counts.
+  const inspectedIds = new Set(inspections.map((i) => i.equipment_id));
   const totalMasterlistAll = masterlist.length;
-  const uniqueAllInspected = new Set(inspections.map((i) => i.equipment_no_id)).size;
+  const uniqueAllInspected = masterlist.filter((e) => inspectedIds.has(e.id)).length;
   const overallPending = Math.max(0, totalMasterlistAll - uniqueAllInspected);
   const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueAllInspected / totalMasterlistAll) * 100) : 0;
 
   const rows = EQUIPMENT_TYPES.map((t) => {
-    const totalEquip  = masterlist.filter((e) => e.type === t).length;
-    const inspected   = inspections.filter((i) => i.equipment_type === t);
-    // unique equipment IDs inspected in the date window
-    const uniqueInspectedIds = new Set(inspected.map((i) => i.equipment_no_id));
-    const inspectedCount = uniqueInspectedIds.size;
-    const passCount = inspected.filter((i) => i.status === 'PASS').length;
+    const typeMaster  = masterlist.filter((e) => e.type === t);
+    const totalEquip  = typeMaster.length;
+    const typeInspected = typeMaster.filter((e) => inspectedIds.has(e.id));
+    const inspectedCount = typeInspected.length;
+    const passCount = typeInspected.filter((e) =>
+      inspections.some((i) => i.equipment_id === e.id && i.status === 'PASS')
+    ).length;
     const notInspected = Math.max(0, totalEquip - inspectedCount);
-    const passRate = inspected.length > 0 ? Math.round((passCount / inspected.length) * 100) : null;
+    const passRate = inspectedCount > 0 ? Math.round((passCount / inspectedCount) * 100) : null;
     const coverage = totalEquip > 0 ? Math.round((inspectedCount / totalEquip) * 100) : null;
 
-    return { type: t, totalEquip, inspectedCount, passCount, notInspected, passRate, coverage, inspections: inspected };
+    return { type: t, totalEquip, inspectedCount, passCount, notInspected, passRate, coverage, inspections: typeInspected };
   }).filter((r) => r.totalEquip > 0 || r.inspectedCount > 0);
 
   if (rows.length === 0) return (
