@@ -118,6 +118,33 @@ function KpiCard({
   );
 }
 
+function PassRateRing({ rate }: { rate: number }) {
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (rate / 100) * circ;
+  const color = rate >= 80 ? '#10b981' : rate >= 50 ? '#d97706' : '#dc2626';
+  return (
+    <div className="panel p-5 flex flex-col items-center justify-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">Pass Rate</span>
+      <div className="relative flex items-center justify-center">
+        <svg width="96" height="96" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r={r} fill="none" stroke="#e7e5e4" strokeWidth="8" />
+          <circle
+            cx="48" cy="48" r={r}
+            fill="none" stroke={color} strokeWidth="8"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            transform="rotate(-90 48 48)"
+            style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
+          />
+        </svg>
+        <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
+      </div>
+      <span className="text-xs text-stone-500">Health score</span>
+    </div>
+  );
+}
+
 function Pagination({
   total, page, pageSize, onChange,
 }: {
@@ -298,18 +325,40 @@ function GuestReportsInner() {
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
 
-  // Coverage KPI
-  const uniqueInspectedSet = useMemo(() => new Set(filteredInspections.map(i => i.equipment_no_id)), [filteredInspections]);
+  // ── Coverage / "Not inspected" ──
+  // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
+  // month/week, so inspecting one period never makes other periods' equipment look "uninspected").
+  const scopeInspections = useMemo(() => {
+    return inspections.filter((item) => {
+      const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
+      const entity        = item.equipment?.entity   ?? '';
+      const facility      = item.equipment?.facility ?? '';
+      const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
+      return matchType && matchEntity && matchFacility;
+    });
+  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+
+  // Match by the real equipment primary key (robust vs no_id string/whitespace mismatches).
+  const inspectedEquipmentIds = useMemo(
+    () => new Set(scopeInspections.map(i => i.equipment_id)),
+    [scopeInspections]
+  );
+
   const totalMasterlistCount = filteredMasterlist.length;
-  const inspectedCount = uniqueInspectedSet.size;
+  const inspectedMasterlist = useMemo(
+    () => filteredMasterlist.filter((m) => inspectedEquipmentIds.has(m.id)),
+    [filteredMasterlist, inspectedEquipmentIds]
+  );
+  const inspectedCount = inspectedMasterlist.length;
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
   // ★ Uninspected equipment list from the masterlist
   const uninspectedRows = useMemo(() => {
     return filteredMasterlist
-      .filter((m) => !uniqueInspectedSet.has(m.no_id))
+      .filter((m) => !inspectedEquipmentIds.has(m.id))
       .sort((a, b) => a.no_id.localeCompare(b.no_id));
-  }, [filteredMasterlist, uniqueInspectedSet]);
+  }, [filteredMasterlist, inspectedEquipmentIds]);
 
   // Reset pages when filters change
   const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
@@ -641,7 +690,7 @@ function GuestReportsInner() {
               color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
               borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
             />
-            <KpiCard label="Pass Rate" value={`${passRate}%`} sub="Safe / inspected" color="text-emerald-600" />
+            <PassRateRing rate={passRate} />
           </div>
 
           {/* ── Tabbed Panel ── */}

@@ -428,17 +428,39 @@ export default function ReportsPage() {
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
 
   // Coverage KPI
-  const uniqueInspectedSet = useMemo(() => new Set(filteredInspections.map(i => i.equipment_no_id)), [filteredInspections]);
+  // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
+  // month/week, so inspecting one period never makes other periods' equipment look "uninspected").
+  const scopeInspections = useMemo(() => {
+    return inspections.filter((item) => {
+      const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
+      const entity        = item.equipment?.entity   ?? '';
+      const facility      = item.equipment?.facility ?? '';
+      const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
+      return matchType && matchEntity && matchFacility;
+    });
+  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+
+  // Match by the real equipment primary key (robust vs no_id string/whitespace mismatches).
+  const inspectedEquipmentIds = useMemo(
+    () => new Set(scopeInspections.map(i => i.equipment_id)),
+    [scopeInspections]
+  );
+
   const totalMasterlistCount = filteredMasterlist.length;
-  const inspectedCount = uniqueInspectedSet.size;
+  const inspectedMasterlist = useMemo(
+    () => filteredMasterlist.filter((e) => inspectedEquipmentIds.has(e.id)),
+    [filteredMasterlist, inspectedEquipmentIds]
+  );
+  const inspectedCount = inspectedMasterlist.length;
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
   // ★ Uninspected equipment list from the masterlist
   const uninspectedRows = useMemo(() => {
     return filteredMasterlist
-      .filter((e) => !uniqueInspectedSet.has(e.no_id))
+      .filter((e) => !inspectedEquipmentIds.has(e.id))
       .sort((a, b) => a.no_id.localeCompare(b.no_id));
-  }, [filteredMasterlist, uniqueInspectedSet]);
+  }, [filteredMasterlist, inspectedEquipmentIds]);
 
   // Reset pages when filters change
   const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
