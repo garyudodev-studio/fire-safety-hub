@@ -10,6 +10,18 @@ import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/compon
 import ImageModal from '@/app/components/ui/ImageModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 
+interface Pic {
+    id: string;
+    name: string;
+    phone: string | null;
+    entity: string | null;
+    facility: string | null;
+    image_profile: string | null;
+    image_contact: string | null;
+    signature_url: string | null;
+    created_at?: string;
+}
+
 const initialFormData = {
     id: '',
     name: '',
@@ -19,7 +31,7 @@ const initialFormData = {
 };
 
 export default function PICDashboard() {
-    const [pics, setPics] = useState<any[]>([]);
+    const [pics, setPics] = useState<Pic[]>([]);
     const [uniqueEntities, setUniqueEntities] = useState<string[]>([]);
     const [uniqueFacilities, setUniqueFacilities] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
@@ -31,7 +43,7 @@ export default function PICDashboard() {
 
     // UI State for Sheet
     const [isSheetOpen, setIsSheetOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState<any>(null);
+    const [editingItem, setEditingItem] = useState<Pic | null>(null);
     const [formData, setFormData] = useState(initialFormData);
 
     // File states
@@ -42,39 +54,38 @@ export default function PICDashboard() {
 
     const supabase = getSupabaseClient();
     const router = useRouter();
+    const [reloadTrigger, setReloadTrigger] = useState(0);
 
     useEffect(() => {
-        const checkUser = async () => {
+        const loadData = async () => {
+            setLoading(true);
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 router.push('/');
                 return;
             }
-            fetchData();
+
+            const { data, error } = await supabase
+                .from('pic')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (!error && data) setPics(data);
+
+            // Fetch equipment entities & facilities for dropdown options
+            const { data: eqData } = await supabase.from('equipment').select('entity, facility');
+            if (eqData) {
+                const entities = Array.from(new Set(eqData.map((e: { entity: string | null }) => e.entity).filter(Boolean))) as string[];
+                const facilities = Array.from(new Set(eqData.map((e: { facility: string | null }) => e.facility).filter(Boolean))) as string[];
+                setUniqueEntities(entities.sort());
+                setUniqueFacilities(facilities.sort());
+            }
+
+            setLoading(false);
         };
-        checkUser();
-    }, []);
 
-    const fetchData = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('pic')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (!error && data) setPics(data);
-
-        // Fetch equipment entities & facilities for dropdown options
-        const { data: eqData } = await supabase.from('equipment').select('entity, facility');
-        if (eqData) {
-            const entities = Array.from(new Set(eqData.map(e => e.entity).filter(Boolean))) as string[];
-            const facilities = Array.from(new Set(eqData.map(e => e.facility).filter(Boolean))) as string[];
-            setUniqueEntities(entities.sort());
-            setUniqueFacilities(facilities.sort());
-        }
-
-        setLoading(false);
-    };
+        loadData();
+    }, [supabase, router, reloadTrigger]);
 
     const openCreateSheet = () => {
         setEditingItem(null);
@@ -85,7 +96,7 @@ export default function PICDashboard() {
         setIsSheetOpen(true);
     };
 
-    const openEditSheet = (item: any) => {
+    const openEditSheet = (item: Pic) => {
         setEditingItem(item);
         setFormData({
             id: item.id || '',
@@ -176,7 +187,16 @@ export default function PICDashboard() {
             }
         }
 
-        const payload: any = {
+        const payload: {
+            id?: string;
+            name: string;
+            phone: string | null;
+            entity: string | null;
+            facility: string | null;
+            image_profile: string | null;
+            image_contact: string | null;
+            signature_url: string | null;
+        } = {
             name: formData.name,
             phone: formData.phone || null,
             entity: formData.entity || null,
@@ -195,7 +215,8 @@ export default function PICDashboard() {
         setIsSaving(false);
         if (!error) {
             closeSheet();
-            fetchData();
+            setLoading(true);
+            setReloadTrigger((t) => t + 1);
         } else {
             setAlertModal({ isOpen: true, title: 'Save Error', message: error.message, type: 'error' });
         }
@@ -219,7 +240,8 @@ export default function PICDashboard() {
 
                 const { error } = await supabase.from('pic').delete().eq('id', id);
                 if (!error) {
-                    fetchData();
+                    setLoading(true);
+                    setReloadTrigger((t) => t + 1);
                 } else {
                     setAlertModal({ isOpen: true, title: 'Error', message: error.message, type: 'error' });
                 }
@@ -238,7 +260,7 @@ export default function PICDashboard() {
     });
     const [accountLoading, setAccountLoading] = useState(false);
     const [accountError, setAccountError] = useState<string | null>(null);
-    const [selectedPicForAccount, setSelectedPicForAccount] = useState<any>(null);
+    const [selectedPicForAccount, setSelectedPicForAccount] = useState<Pic | null>(null);
 
     useEffect(() => {
         if (!isSheetOpen && !isAccountModalOpen) return;
@@ -252,7 +274,7 @@ export default function PICDashboard() {
         return () => window.removeEventListener('keydown', onKey);
     }, [isSheetOpen, isAccountModalOpen]);
 
-    const openAccountModal = (pic: any) => {
+    const openAccountModal = (pic: Pic) => {
         setSelectedPicForAccount(pic);
         setAccountFormData({
             email: '',
@@ -267,6 +289,7 @@ export default function PICDashboard() {
 
     const handleCreateAccount = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedPicForAccount) return;
         setAccountLoading(true);
         setAccountError(null);
 
@@ -294,9 +317,10 @@ export default function PICDashboard() {
                 type: 'success'
             });
             setIsAccountModalOpen(false);
-            fetchData();
-        } catch (err: any) {
-            setAccountError(err.message);
+            setLoading(true);
+            setReloadTrigger((t) => t + 1);
+        } catch (err) {
+            setAccountError(err instanceof Error ? err.message : 'An unexpected error occurred');
         } finally {
             setAccountLoading(false);
         }
@@ -349,7 +373,7 @@ export default function PICDashboard() {
                                             <ProtectedImage
                                                 src={item.image_profile}
                                                 alt={item.name}
-                                                onPreview={() => setPreviewImage({ url: item.image_profile, title: `${item.name} - Profile Image` })}
+                                                onPreview={() => setPreviewImage({ url: item.image_profile!, title: `${item.name} - Profile Image` })}
                                                 className="h-24 w-24 rounded-full border-2 border-line object-cover"
                                             />
                                         ) : (
@@ -386,7 +410,7 @@ export default function PICDashboard() {
                                             <ProtectedImage
                                                 src={item.signature_url}
                                                 alt="Signature"
-                                                onPreview={() => setPreviewImage({ url: item.signature_url, title: `${item.name} - Digital Signature` })}
+                                                onPreview={() => setPreviewImage({ url: item.signature_url!, title: `${item.name} - Digital Signature` })}
                                                 className="h-full object-contain"
                                             />
                                         </div>

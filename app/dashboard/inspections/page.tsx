@@ -15,9 +15,74 @@ function getTypeBadgeColor(type: string): string {
     case 'Fire Hydrant': return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
     case 'Fire Extinguisher': return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
     case 'Emergency Lamp': return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
-    case 'Emergency Exit Lamp': return 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60';
     default: return 'bg-white/[0.04] text-ink-300 border-line';
   }
+}
+
+function formatMonthYear(monthYear: string): string {
+  const [mm, yyyy] = monthYear.split('/');
+  const monthNum = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
+  return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
+}
+
+function FilterRequired({ scope = 'data' }: { scope?: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      </span>
+      <p className="text-sm text-ink-300 font-medium">Select a filter to view {scope}</p>
+      <p className="text-xs text-ink-500 max-w-md">
+        Choose a <strong className="text-ink-300">Month</strong> (and optionally <strong className="text-ink-300">Week</strong>) above to see inspection logs for that period.
+      </p>
+    </div>
+  );
+}
+
+function KpiCard({
+  label, value, sub, color = 'text-ink-100', borderColor = '',
+}: {
+  label: string; value: string | number; sub?: string;
+  color?: string; borderColor?: string;
+}) {
+  return (
+    <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <span className={`text-4xl font-bold mt-1 ${color}`}>{value}</span>
+      {sub && <span className="text-xs text-ink-500 mt-0.5">{sub}</span>}
+    </div>
+  );
+}
+
+function PassRateRing({ rate }: { rate: number }) {
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (rate / 100) * circ;
+  const color = rate >= 80 ? '#34d399' : rate >= 50 ? '#fbbf24' : '#f87171';
+  return (
+    <div className="panel p-5 flex flex-col items-center justify-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
+      <div className="relative flex items-center justify-center">
+        <svg width="96" height="96" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+          <circle
+            cx="48" cy="48" r={r}
+            fill="none" stroke={color} strokeWidth="8"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            transform="rotate(-90 48 48)"
+            style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
+          />
+        </svg>
+        <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
+      </div>
+      <span className="text-xs text-ink-500">Health score</span>
+    </div>
+  );
 }
 
 export default function InspectionsPage() {
@@ -31,51 +96,53 @@ export default function InspectionsPage() {
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedEntity, setSelectedEntity] = useState('All');
   const [selectedFacility, setSelectedFacility] = useState('All');
+  const [selectedMonth, setSelectedMonth] = useState(''); // "MM/YYYY" from inspection data
+  const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
 
   const supabase = getSupabaseClient();
-
-  const checkAuthAndFetch = async () => {
-    setLoading(true);
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      router.push('/');
-      return;
-    }
-
-    // Auto-set Inspector entity and facility from profile if logged in as inspector
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('role, entity, facility, pic:pic_id(entity, facility)')
-      .eq('id', sessionData.session.user.id)
-      .single();
-
-    if (userProfile) {
-      const assignedEntity = userProfile.entity || (userProfile.pic as any)?.entity;
-      const assignedFacility = userProfile.facility || (userProfile.pic as any)?.facility;
-      if (assignedEntity) setSelectedEntity(assignedEntity);
-      if (assignedFacility) setSelectedFacility(assignedFacility);
-    }
-
-    const { data, error } = await supabase
-      .from('inspections')
-      .select(`
-        *,
-        equipment:equipment_id(location, facility, area, entity)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setInspections(data as InspectionRecord[]);
-    }
-    setLoading(false);
-  };
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   useEffect(() => {
+    const checkAuthAndFetch = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        router.push('/');
+        return;
+      }
+
+      // Auto-set Inspector entity and facility from profile if logged in as inspector
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('role, entity, facility, pic:pic_id(entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (userProfile) {
+        const assignedEntity = userProfile.entity || userProfile.pic?.entity;
+        const assignedFacility = userProfile.facility || userProfile.pic?.facility;
+        if (assignedEntity) setSelectedEntity(assignedEntity);
+        if (assignedFacility) setSelectedFacility(assignedFacility);
+      }
+
+      const { data, error } = await supabase
+        .from('inspections')
+        .select(`
+          *,
+          equipment:equipment_id(location, facility, area, entity)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setInspections(data as InspectionRecord[]);
+      }
+      setLoading(false);
+    };
+
     checkAuthAndFetch();
-  }, []);
+  }, [supabase, router, reloadTrigger]);
 
   const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null);
   const [alertModal, setAlertModal] = useState<AlertState | null>(null);
@@ -106,7 +173,7 @@ export default function InspectionsPage() {
   const uniqueEntities = useMemo(() => {
     const set = new Set<string>();
     inspections.forEach(i => {
-      const ent = (i.equipment as any)?.entity;
+      const ent = i.equipment?.entity;
       if (ent) set.add(ent);
     });
     return ['All', ...Array.from(set).sort()];
@@ -115,14 +182,24 @@ export default function InspectionsPage() {
   const uniqueFacilities = useMemo(() => {
     const set = new Set<string>();
     inspections.forEach(i => {
-      const fac = (i.equipment as any)?.facility;
-      const ent = (i.equipment as any)?.entity;
+      const fac = i.equipment?.facility;
+      const ent = i.equipment?.entity;
       if (fac && (selectedEntity === 'All' || ent === selectedEntity)) {
         set.add(fac);
       }
     });
     return ['All', ...Array.from(set).sort()];
   }, [inspections, selectedEntity]);
+
+  // Period options derived from inspection data
+  const monthOptions = useMemo(() => {
+    return Array.from(new Set(inspections.map((i) => i.month_year).filter(Boolean))).sort().reverse();
+  }, [inspections]);
+
+  const weekOptions = useMemo(() => {
+    const base = inspections.filter((i) => i.month_year === selectedMonth);
+    return Array.from(new Set(base.map((i) => i.week).filter(Boolean))).sort();
+  }, [inspections, selectedMonth]);
 
   // Filtered Inspections
   const filteredInspections = useMemo(() => {
@@ -138,20 +215,43 @@ export default function InspectionsPage() {
         (selectedStatus === 'PASS' && item.status === 'PASS') ||
         (selectedStatus === 'NEEDS_ATTENTION' && item.status !== 'PASS');
 
-      const entity = (item.equipment as any)?.entity || '';
-      const facility = (item.equipment as any)?.facility || '';
+      const entity = item.equipment?.entity || '';
+      const facility = item.equipment?.facility || '';
       const matchesEntity = selectedEntity === 'All' || entity === selectedEntity;
       const matchesFacility = selectedFacility === 'All' || facility === selectedFacility;
 
-      return matchesSearch && matchesType && matchesStatus && matchesEntity && matchesFacility;
+      const matchesMonth = !selectedMonth || item.month_year === selectedMonth;
+      const matchesWeek  = !selectedWeek  || item.week === selectedWeek;
+
+      return matchesSearch && matchesType && matchesStatus && matchesEntity && matchesFacility && matchesMonth && matchesWeek;
     });
-  }, [inspections, searchQuery, selectedType, selectedStatus, selectedEntity, selectedFacility]);
+  }, [inspections, searchQuery, selectedType, selectedStatus, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // Metrics calculation
   const totalInspections = filteredInspections.length;
   const passCount = filteredInspections.filter((i) => i.status === 'PASS').length;
   const needsAttentionCount = filteredInspections.filter((i) => i.status !== 'PASS').length;
   const passRate = totalInspections > 0 ? Math.round((passCount / totalInspections) * 100) : 100;
+
+  // Data is only shown once the user picks a period filter (month/week).
+  const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
+
+  // Reset week when month changes
+  const [prevMonth, setPrevMonth] = useState(selectedMonth);
+  if (prevMonth !== selectedMonth) {
+    setPrevMonth(selectedMonth);
+    setSelectedWeek('');
+  }
+
+  const setThisMonth = () => {
+    const now = new Date();
+    setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    setSelectedWeek('');
+  };
+  const clearPeriod = () => {
+    setSelectedMonth('');
+    setSelectedWeek('');
+  };
 
   return (
     <>
@@ -188,97 +288,160 @@ export default function InspectionsPage() {
             </button>
           </div>
 
-          {/* Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Total Inspections</span>
-              <span className="text-2xl font-bold text-ink-100 mt-2">{totalInspections}</span>
-              <span className="text-xs text-ink-400 mt-1">Logged records</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
-              <span className="text-2xl font-bold text-emerald-400 mt-2">{passRate}%</span>
-              <span className="text-xs text-ink-400 mt-1">{passCount} passed items</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Needs Attention</span>
-              <span className="text-2xl font-bold text-rose-400 mt-2">{needsAttentionCount}</span>
-              <span className="text-xs text-ink-400 mt-1">Defects flagged</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Checklist Standard</span>
-              <span className="text-lg font-bold text-ember-400 mt-2">100% Yes/No</span>
-              <span className="text-xs text-ink-400 mt-1">Photo verified</span>
-            </div>
-          </div>
-
           {/* Filters & Search Bar */}
-          <div className="panel p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="relative w-full md:w-72">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search ID, inspector..."
-                className="input pl-10 text-xs"
-              />
-              <svg className="absolute left-3 top-3 w-4 h-4 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+          <div className="panel p-5 space-y-4">
+            {/* Row 1: search, entity, facility, type, status */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[140px]">
+                <label className="field-label text-[10px]">Search</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ID, inspector, type…"
+                    className="input pl-9 text-xs"
+                  />
+                  <svg className="absolute left-3 top-2.5 w-4 h-4 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Entity</label>
+                <select
+                  value={selectedEntity}
+                  onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }}
+                  className="input text-xs"
+                >
+                  {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[120px]">
+                <label className="field-label text-[10px]">Facility</label>
+                <select
+                  value={selectedFacility}
+                  onChange={(e) => setSelectedFacility(e.target.value)}
+                  className="input text-xs"
+                >
+                  {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label text-[10px]">Equipment Type</label>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="input text-xs"
+                >
+                  <option value="All">All Types</option>
+                  <option value="Fire Extinguisher">Fire Extinguisher</option>
+                  <option value="Fire Alarm">Fire Alarm</option>
+                  <option value="Fire Hydrant">Fire Hydrant</option>
+                  <option value="Emergency Lamp">Emergency Lamp</option>
+                </select>
+              </div>
+
+              <div className="flex-1 min-w-[130px]">
+                <label className="field-label text-[10px]">Status</label>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="input text-xs"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="PASS">Pass Only</option>
+                  <option value="NEEDS_ATTENTION">Needs Attention</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              {/* Entity Filter */}
-              <select
-                value={selectedEntity}
-                onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }}
-                className="input text-xs w-full md:w-36"
-              >
-                {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
-              </select>
+            {/* Row 2: period (month then week) */}
+            <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
+              <div>
+                <label className="field-label text-[10px]">Month</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="input text-xs w-40"
+                >
+                  <option value="">All Months</option>
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>{formatMonthYear(m)}</option>
+                  ))}
+                </select>
+              </div>
 
-              {/* Facility Filter */}
-              <select
-                value={selectedFacility}
-                onChange={(e) => setSelectedFacility(e.target.value)}
-                className="input text-xs w-full md:w-36"
-              >
-                {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
-              </select>
+              <div>
+                <label className="field-label text-[10px]">Week</label>
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  disabled={!selectedMonth}
+                  className="input text-xs w-36"
+                >
+                  <option value="">All Weeks</option>
+                  {weekOptions.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              </div>
 
-              {/* Type Filter */}
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="input text-xs w-full md:w-40"
-              >
-                <option value="All">All Types</option>
-                <option value="Fire Extinguisher">Fire Extinguisher</option>
-                <option value="Fire Alarm">Fire Alarm</option>
-                <option value="Fire Hydrant">Fire Hydrant</option>
-                <option value="Emergency Lamp">Emergency Lamp</option>
-                <option value="Emergency Exit Lamp">Emergency Exit Lamp</option>
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="input text-xs w-full md:w-36"
-              >
-                <option value="All">All Statuses</option>
-                <option value="PASS">Pass Only</option>
-                <option value="NEEDS_ATTENTION">Needs Attention</option>
-              </select>
+              <div className="flex gap-2 pb-0.5">
+                <button onClick={setThisMonth} className="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">
+                  This Month
+                </button>
+                {(selectedMonth || selectedWeek) && (
+                  <button onClick={clearPeriod} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Metrics Cards */}
+          {hasPeriodFilter ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Total Inspections" value={totalInspections} sub="Logged records" color="text-ink-100" />
+              <KpiCard
+                label="Needs Attention"
+                value={needsAttentionCount}
+                sub="Defects flagged"
+                color="text-rose-400"
+                borderColor="border-rose-900/30"
+              />
+              <KpiCard
+                label="Checklist Standard"
+                value="100%"
+                sub="Yes/No · Photo verified"
+                color="text-ember-400"
+                borderColor="border-ember-900/30"
+              />
+              <KpiCard
+                label="Passed Items"
+                value={passCount}
+                sub="PASS results"
+                color="text-emerald-400"
+                borderColor="border-emerald-900/30"
+              />
+              <PassRateRing rate={passRate} />
+            </div>
+          ) : (
+            <div className="panel">
+              <FilterRequired scope="inspection metrics" />
+            </div>
+          )}
 
           {/* Table */}
           <div className="table-wrap">
+            {!hasPeriodFilter ? (
+              <FilterRequired scope="inspection logs" />
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -308,8 +471,8 @@ export default function InspectionsPage() {
                     </tr>
                   ) : (
                     filteredInspections.map((item) => {
-                      const entity = (item.equipment as any)?.entity || '';
-                      const facility = (item.equipment as any)?.facility || '';
+                      const entity = item.equipment?.entity || '';
+                      const facility = item.equipment?.facility || '';
                       return (
                         <tr key={item.id} className="transition-colors hover:bg-white/[0.03]">
                           <td className="td font-bold text-ink-100">{item.equipment_no_id}</td>
@@ -369,6 +532,7 @@ export default function InspectionsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -390,7 +554,8 @@ export default function InspectionsPage() {
             <InspectionForm
               onSuccess={() => {
                 setShowCreateModal(false);
-                checkAuthAndFetch();
+                setLoading(true);
+                setReloadTrigger((t) => t + 1);
               }}
               onCancel={() => setShowCreateModal(false)}
             />

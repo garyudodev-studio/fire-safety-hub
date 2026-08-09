@@ -166,6 +166,113 @@
     @apply px-4 py-3 text-sm text-ink-300 whitespace-nowrap;
   }
 
+  /* Stack tables as cards on small screens (labels via data-label) */
+  @media (max-width: 767px) {
+    .mobile-cards thead {
+      display: none;
+    }
+    .mobile-cards,
+    .mobile-cards tbody,
+    .mobile-cards tr,
+    .mobile-cards td {
+      display: block;
+      width: 100%;
+    }
+    .mobile-cards {
+      border-bottom: none !important;
+    }
+    .mobile-cards tbody {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      padding: 0.625rem;
+    }
+    .mobile-cards tbody,
+    .mobile-cards tr {
+      border: none !important;
+      background: transparent;
+    }
+    .mobile-cards tr {
+      border: 1px solid var(--color-line) !important;
+      border-radius: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .mobile-cards td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px dashed var(--color-line);
+      white-space: normal;
+      text-align: right;
+      font-size: 0.8rem;
+    }
+    .mobile-cards td:last-child {
+      border-bottom: none;
+    }
+    .mobile-cards td::before {
+      content: attr(data-label);
+      flex-shrink: 0;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-ink-500);
+      text-align: left;
+    }
+  }
+
+  /* ---- Light theme scope (guest public view) ---- */
+  .theme-light {
+    color-scheme: light;
+  }
+  .theme-light .panel {
+    @apply bg-white border-stone-200 shadow-[0_1px_2px_rgba(28,25,23,0.04),0_8px_24px_-16px_rgba(28,25,23,0.12)];
+  }
+  .theme-light .panel-raised {
+    @apply bg-white border-stone-200;
+  }
+  .theme-light .btn-ghost {
+    @apply bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200 hover:border-stone-300;
+  }
+  .theme-light .btn-soft {
+    @apply bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 hover:text-stone-800;
+  }
+  .theme-light .icon-btn {
+    @apply bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200 hover:text-stone-900;
+  }
+  .theme-light .field-label {
+    @apply text-stone-500;
+  }
+  .theme-light .input,
+  .theme-light .select {
+    @apply bg-white border-stone-300 text-stone-900 placeholder:text-stone-400
+      focus:border-red-800/70 focus:ring-4 focus:ring-red-800/10;
+  }
+  .theme-light .chip {
+    @apply border-stone-200 bg-stone-100 text-stone-600;
+  }
+  .theme-light .th {
+    @apply text-stone-500;
+  }
+  .theme-light .td {
+    @apply text-stone-600;
+  }
+  @media (max-width: 767px) {
+    .theme-light .mobile-cards tr {
+      border-color: rgba(231, 229, 228, 1) !important;
+      background: #ffffff;
+    }
+    .theme-light .mobile-cards td {
+      border-bottom-color: rgba(231, 229, 228, 1);
+    }
+    .theme-light .mobile-cards td::before {
+      color: #a8a29e;
+    }
+  }
+
   /* ---- Motion ---- */
   .animate-slide-down {
     animation: slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);

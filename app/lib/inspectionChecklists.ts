@@ -4,6 +4,7 @@ export interface ChecklistItem {
   labelEn: string;
   isIndent?: boolean;
   expectedAnswer?: 'YES' | 'NO'; // Default is 'YES' if omitted. Set to 'NO' for questions where NO means normal (e.g. "Apakah Ada Kebocoran?")
+  allowNA?: boolean; // Show a "Not Applicable / Tidak Ada" answer option. Counts as a passing (normal) result.
 }
 
 export interface ChecklistSection {
@@ -37,7 +38,7 @@ export const CHECKLIST_DEFINITIONS: Record<string, EquipmentChecklist> = {
           { id: 'fe_1_2', labelId: 'Penempatannya Benar', labelEn: 'Correct Placement' },
           { id: 'fe_1_3', labelId: 'Peralatan Layak dan Mudah dicapai, dan tidak Terhalangi', labelEn: 'The equipment is suitable and easily accessible, and is not obstructed' },
           { id: 'fe_1_4', labelId: 'Peralatan Bersih, Tidak Rusak, Tidak Berkarat, Tidak Bocor', labelEn: 'Clean, Undamaged, Rust-Free, and Leak-Free Equipment' },
-          { id: 'fe_1_5', labelId: 'Kondisi Ban, Roda, Selang, Kereta, Nozzle (Unit Beroda)', labelEn: 'Condition of Tires, Wheels, Hoses, Trolleys, Nozzles (Wheeled Units)' },
+          { id: 'fe_1_5', labelId: 'Kondisi Ban, Roda, Selang, Kereta, Nozzle (Unit Beroda)', labelEn: 'Condition of Tires, Wheels, Hoses, Trolleys, Nozzles (Wheeled Units)', allowNA: true },
         ],
       },
       {
@@ -90,7 +91,7 @@ export const CHECKLIST_DEFINITIONS: Record<string, EquipmentChecklist> = {
         titleEn: 'EMERGENCY & EXIT LAMP CHECKLIST',
         items: [
           { id: 'el_1', labelId: 'LAMPU EMERGENCY HIDUP', labelEn: 'EMERGENCY LIGHTS ON' },
-          { id: 'el_2', labelId: 'LAMPU EXIT HIDUP', labelEn: 'EXIT LAMP ON' },
+          { id: 'el_2', labelId: 'LAMPU EXIT HIDUP', labelEn: 'EXIT LAMP ON', allowNA: true },
           { id: 'el_3', labelId: 'SUPLAY LISTRIK', labelEn: 'ELECTRICAL SUPPLY' },
           { id: 'el_4', labelId: 'PENGISI DAYA BATERAI MIN. 90 MENIT', labelEn: 'BATTERY CHARGER MIN. 90 MINUTES' },
           { id: 'el_5', labelId: 'BATTERY TERISI', labelEn: 'BATTERY CHARGED' },

@@ -13,7 +13,7 @@ export interface InspectionRecord {
   inspection_date: string;
   week: string;
   month_year: string;
-  answers: Record<string, 'YES' | 'NO'>;
+  answers: Record<string, 'YES' | 'NO' | 'NA'>;
   status: 'PASS' | 'NEEDS_ATTENTION' | string;
   photo_url: string;
   remarks?: string | null;
@@ -24,6 +24,9 @@ export interface InspectionRecord {
     facility?: string;
     area?: string;
     area_2?: string;
+    entity?: string;
+    pic_1?: { id?: string; name?: string; image_profile?: string } | null;
+    pic_2?: { id?: string; name?: string; image_profile?: string } | null;
   } | null;
 }
 
@@ -33,20 +36,115 @@ import ProtectedImage from '@/app/components/ui/ProtectedImage';
 interface InspectionDetailModalProps {
   inspection: InspectionRecord | null;
   onClose: () => void;
+  theme?: 'light' | 'dark';
 }
 
-export default function InspectionDetailModal({ inspection, onClose }: InspectionDetailModalProps) {
+type ThemeTokens = {
+  overlay: string;
+  surface: string;
+  header: string;
+  headerText: string;
+  typePill: string;
+  statusPass: string;
+  statusFail: string;
+  closeBtn: string;
+  metaCard: string;
+  metaLabel: string;
+  metaValue: string;
+  docNo: string;
+  sectionHeading: string;
+  box: string;
+  boxPlaceholder: string;
+  photoBox: string;
+  signatureBox: string;
+  signatureBlank: string;
+  checklistBar: string;
+  checklistTitle: string;
+  itemText: string;
+  itemEn: string;
+  answerNormal: string;
+  answerFail: string;
+  footer: string;
+  footerText: string;
+  footerClose: string;
+};
+
+const DARK: ThemeTokens = {
+  overlay: 'bg-ink-950/80 backdrop-blur-md',
+  surface: 'bg-ink-900 border-line',
+  header: 'bg-ink-950/60',
+  headerText: 'text-ink-100',
+  typePill: 'bg-ink-800 border-line text-ink-200',
+  statusPass: 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60',
+  statusFail: 'bg-rose-950/60 text-rose-300 border-rose-900/60',
+  closeBtn: 'text-ink-400 hover:bg-ink-800 hover:text-ink-100',
+  metaCard: 'border-line bg-ink-950/50',
+  metaLabel: 'text-ink-500',
+  metaValue: 'text-ink-100',
+  docNo: 'text-ember-400',
+  sectionHeading: 'text-ink-300',
+  photoBox: 'border-line bg-black',
+  box: 'border-line bg-ink-950/60 text-ink-200',
+  boxPlaceholder: 'text-ink-600 italic',
+  signatureBox: 'bg-white/5 border-line',
+  signatureBlank: 'text-ink-500',
+  checklistBar: 'bg-ink-950 border-line text-ink-200',
+  checklistTitle: 'divide-line border-line bg-ink-950/40',
+  itemText: 'text-ink-100',
+  itemEn: 'text-sky-400',
+  answerNormal: 'bg-emerald-950/80 text-emerald-300 border-emerald-900/60',
+  answerFail: 'bg-rose-950/80 text-rose-300 border-rose-900/60',
+  footer: 'bg-ink-950/60',
+  footerText: 'text-ink-500',
+  footerClose: 'bg-ink-800 text-ink-100 hover:bg-ink-700',
+};
+
+const LIGHT: ThemeTokens = {
+  overlay: 'bg-stone-900/30 backdrop-blur-[2px]',
+  surface: 'bg-white border-stone-200 shadow-2xl shadow-stone-900/10',
+  header: 'bg-stone-50 border-stone-200',
+  headerText: 'text-stone-900',
+  typePill: 'bg-stone-100 border-stone-200 text-stone-700',
+  statusPass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  statusFail: 'bg-rose-50 text-rose-700 border-rose-200',
+  closeBtn: 'text-stone-400 hover:bg-stone-100 hover:text-stone-800',
+  metaCard: 'border-stone-200 bg-stone-50',
+  metaLabel: 'text-stone-500',
+  metaValue: 'text-stone-900',
+  docNo: 'text-red-800',
+  sectionHeading: 'text-stone-600',
+  photoBox: 'border-stone-200 bg-stone-100',
+  box: 'border-stone-200 bg-stone-50 text-stone-700',
+  boxPlaceholder: 'text-stone-400 italic',
+  signatureBox: 'bg-white border-stone-200',
+  signatureBlank: 'text-stone-400',
+  checklistBar: 'bg-stone-100 border-stone-200 text-stone-700',
+  checklistTitle: 'divide-stone-200 border-stone-200 bg-white',
+  itemText: 'text-stone-800',
+  itemEn: 'text-sky-700',
+  answerNormal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  answerFail: 'bg-rose-50 text-rose-700 border-rose-200',
+  footer: 'bg-stone-50',
+  footerText: 'text-stone-500',
+  footerClose: 'bg-stone-100 text-stone-700 hover:bg-stone-200',
+};
+
+export default function InspectionDetailModal({ inspection, onClose, theme = 'dark' }: InspectionDetailModalProps) {
   const [inspectorSignature, setInspectorSignature] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const supabase = getSupabaseClient();
 
-  useEffect(() => {
-    if (!inspection?.inspector_name) {
-      setInspectorSignature(null);
-      return;
-    }
+  const [prevInspectorName, setPrevInspectorName] = useState<string | undefined>(inspection?.inspector_name);
+  if (prevInspectorName !== inspection?.inspector_name) {
+    setPrevInspectorName(inspection?.inspector_name);
+    setInspectorSignature(null);
+  }
 
+  useEffect(() => {
+    if (!inspection?.inspector_name) return;
+
+    let cancelled = false;
     const fetchSignature = async () => {
       const { data } = await supabase
         .from('pic')
@@ -54,35 +152,35 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
         .eq('name', inspection.inspector_name)
         .single();
 
-      if (data?.signature_url) {
-        setInspectorSignature(data.signature_url);
-      } else {
-        setInspectorSignature(null);
+      if (!cancelled) {
+        setInspectorSignature(data?.signature_url || null);
       }
     };
 
     fetchSignature();
-  }, [inspection]);
+    return () => {
+      cancelled = true;
+    };
+  }, [inspection, supabase]);
 
   if (!inspection) return null;
 
   const checklist = getChecklistForType(inspection.equipment_type);
+  const T = theme === 'light' ? LIGHT : DARK;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 bg-ink-950/80 backdrop-blur-md flex justify-center items-start animate-fade">
-      <div className="relative w-full max-w-4xl bg-ink-900 border border-line rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto sm:my-8">
+    <div className={`fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 ${T.overlay} flex justify-center items-start animate-fade`}>
+      <div className={`relative w-full max-w-4xl ${T.surface} rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto sm:my-8`}>
         {/* Header */}
-        <div className="p-6 border-b border-line flex items-center justify-between bg-ink-950/60 shrink-0">
+        <div className={`p-6 border-b flex items-center justify-between ${T.header} shrink-0`}>
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-ink-100">{inspection.equipment_no_id}</span>
-            <span className="text-xs px-2.5 py-1 rounded-lg bg-ink-800 border border-line text-ink-200 font-medium">
+            <span className={`text-xl font-bold ${T.headerText}`}>{inspection.equipment_no_id}</span>
+            <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${T.typePill}`}>
               {inspection.equipment_type}
             </span>
             <span
               className={`text-xs px-3 py-1 rounded-full font-bold border ${
-                inspection.status === 'PASS'
-                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60'
-                  : 'bg-rose-950/60 text-rose-300 border-rose-900/60'
+                inspection.status === 'PASS' ? T.statusPass : T.statusFail
               }`}
             >
               {inspection.status === 'PASS' ? '✓ PASS' : '⚠️ NEEDS ATTENTION'}
@@ -91,7 +189,7 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-ink-400 hover:bg-ink-800 hover:text-ink-100 transition-colors"
+            className={`p-2 rounded-xl transition-colors ${T.closeBtn}`}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -103,22 +201,28 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
         {/* Modal Content */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {/* Metadata Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-line bg-ink-950/50 text-xs">
+          <div className={`grid grid-cols-2 md:grid-cols-5 gap-4 p-4 rounded-2xl border text-xs ${T.metaCard}`}>
             <div>
-              <span className="text-ink-500 block uppercase font-semibold text-[10px]">Inspector</span>
-              <span className="text-ink-100 font-medium">{inspection.inspector_name}</span>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Inspector</span>
+              <span className={`${T.metaValue} font-medium`}>{inspection.inspector_name}</span>
             </div>
             <div>
-              <span className="text-ink-500 block uppercase font-semibold text-[10px]">Date</span>
-              <span className="text-ink-100 font-medium">{inspection.inspection_date}</span>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Date</span>
+              <span className={`${T.metaValue} font-medium`}>{inspection.inspection_date}</span>
             </div>
             <div>
-              <span className="text-ink-500 block uppercase font-semibold text-[10px]">Period</span>
-              <span className="text-ink-100 font-medium">{inspection.week} ({inspection.month_year})</span>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Period</span>
+              <span className={`${T.metaValue} font-medium`}>{inspection.week} ({inspection.month_year})</span>
             </div>
             <div>
-              <span className="text-ink-500 block uppercase font-semibold text-[10px]">Form Doc No.</span>
-              <span className="text-ember-400 font-mono">{checklist.docNo}</span>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Area / Location</span>
+              <span className={`${T.metaValue} font-medium`}>
+                {[inspection.equipment?.area, inspection.equipment?.location].filter(Boolean).join(' · ') || (inspection.equipment?.area || '—')}
+              </span>
+            </div>
+            <div>
+              <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Form Doc No.</span>
+              <span className={`${T.docNo} font-mono`}>{checklist.docNo}</span>
             </div>
           </div>
 
@@ -128,10 +232,10 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
             <div className="space-y-4">
               {inspection.photo_url.split(',').map((url, idx) => (
                 <div key={idx} className="space-y-2">
-                  <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider">
+                  <h4 className={`text-xs font-bold ${T.sectionHeading} uppercase tracking-wider`}>
                     {idx === 0 ? 'Equipment Verification Photo (Live Captured)' : 'Printed Checklist Form Photo'}
                   </h4>
-                  <div className="rounded-2xl overflow-hidden border border-line bg-black aspect-video flex items-center justify-center">
+                  <div className={`rounded-2xl overflow-hidden border aspect-video flex items-center justify-center ${T.photoBox}`}>
                     <ProtectedImage
                       src={url.trim()}
                       alt={`Photo ${idx + 1} for ${inspection.equipment_no_id}`}
@@ -146,28 +250,28 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
             {/* Remarks, Actions & Digital Signature */}
             <div className="space-y-4 flex flex-col justify-between">
               <div>
-                <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider mb-2">Remarks (Keterangan)</h4>
-                <div className="p-3 rounded-xl border border-line bg-ink-950/60 text-xs text-ink-200 min-h-16">
-                  {inspection.remarks || <span className="text-ink-600 italic">No specific remarks recorded.</span>}
+                <h4 className={`text-xs font-bold ${T.sectionHeading} uppercase tracking-wider mb-2`}>Remarks (Keterangan)</h4>
+                <div className={`p-3 rounded-xl border text-xs min-h-16 ${T.box}`}>
+                  {inspection.remarks || <span className={T.boxPlaceholder}>No specific remarks recorded.</span>}
                 </div>
               </div>
 
               <div>
-                <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider mb-2">Action Taken (Tindakan)</h4>
-                <div className="p-3 rounded-xl border border-line bg-ink-950/60 text-xs text-ink-200 min-h-16">
-                  {inspection.action_taken || <span className="text-ink-600 italic">No immediate action taken recorded.</span>}
+                <h4 className={`text-xs font-bold ${T.sectionHeading} uppercase tracking-wider mb-2`}>Action Taken (Tindakan)</h4>
+                <div className={`p-3 rounded-xl border text-xs min-h-16 ${T.box}`}>
+                  {inspection.action_taken || <span className={T.boxPlaceholder}>No immediate action taken recorded.</span>}
                 </div>
               </div>
 
               {/* Inspector Digital Signature */}
-              <div className="p-3 rounded-xl border border-line bg-ink-950/60 flex items-center justify-between">
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${T.box}`}>
                 <div>
-                  <span className="text-[10px] font-semibold text-ink-500 uppercase tracking-wider block">Inspector Signature</span>
-                  <span className="text-xs font-bold text-ink-100">{inspection.inspector_name}</span>
+                  <span className={`text-[10px] font-semibold ${T.metaLabel} uppercase tracking-wider block`}>Inspector Signature</span>
+                  <span className={`text-xs font-bold ${T.metaValue}`}>{inspection.inspector_name}</span>
                 </div>
 
                 {inspectorSignature ? (
-                  <div className="h-12 w-28 bg-white/5 border border-line rounded-lg p-1 flex items-center justify-center">
+                  <div className={`h-12 w-28 border rounded-lg p-1 flex items-center justify-center ${T.signatureBox}`}>
                     <ProtectedImage
                       src={inspectorSignature}
                       alt="Digital Signature"
@@ -176,7 +280,7 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
                     />
                   </div>
                 ) : (
-                  <span className="text-[10px] text-ink-500 italic">No signature on file</span>
+                  <span className={`text-[10px] italic ${T.signatureBlank}`}>No signature on file</span>
                 )}
               </div>
             </div>
@@ -184,20 +288,22 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
 
           {/* Detailed Question Answers */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-ink-300 uppercase tracking-wider">Checklist Item Results</h4>
-            
+            <h4 className={`text-xs font-bold ${T.sectionHeading} uppercase tracking-wider`}>Checklist Item Results</h4>
+
             <div className="space-y-4">
               {checklist.sections.map((section, sIdx) => (
                 <div key={sIdx} className="space-y-2">
-                  <div className="bg-ink-950 px-3 py-1.5 rounded-lg border border-line">
-                    <span className="text-xs font-semibold text-ink-200">{section.titleId}</span>
+                  <div className={`px-3 py-1.5 rounded-lg border ${T.checklistBar}`}>
+                    <span className="text-xs font-semibold">{section.titleId}</span>
                   </div>
 
-                  <div className="divide-y divide-line rounded-xl border border-line bg-ink-950/40 overflow-hidden text-xs">
+                  <div className={`divide-y border rounded-xl overflow-hidden text-xs ${T.checklistTitle}`}>
                     {section.items.map((item) => {
                       const answer = inspection.answers[item.id];
                       const expected = item.expectedAnswer || 'YES';
-                      const isNormal = answer === expected;
+                      const isNormal = item.allowNA && answer === 'NA'
+                        ? true
+                        : answer === expected;
                       return (
                         <div
                           key={item.id}
@@ -206,18 +312,16 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
                           }`}
                         >
                           <div>
-                            <p className="text-ink-100 font-medium">{item.labelId}</p>
-                            <p className="text-[11px] text-sky-400 italic">{item.labelEn}</p>
+                            <p className={`font-medium ${T.itemText}`}>{item.labelId}</p>
+                            <p className={`text-[11px] italic ${T.itemEn}`}>{item.labelEn}</p>
                           </div>
 
                           <span
-                            className={`px-2.5 py-1 rounded-md font-bold text-[11px] ${
-                              isNormal
-                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-900/60'
-                                : 'bg-rose-950/80 text-rose-300 border border-rose-900/60'
+                            className={`px-2.5 py-1 rounded-md font-bold text-[11px] border ${
+                              isNormal ? T.answerNormal : T.answerFail
                             }`}
                           >
-                            {answer === 'YES' ? 'YA / YES' : 'TIDAK / NO'} ({isNormal ? 'Normal' : 'Defect'})
+                            {answer === 'YES' ? 'YA / YES' : answer === 'NA' ? 'TIDAK ADA / N/A' : 'TIDAK / NO'} ({isNormal ? 'Normal' : 'Defect'})
                           </span>
                         </div>
                       );
@@ -230,13 +334,13 @@ export default function InspectionDetailModal({ inspection, onClose }: Inspectio
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-line bg-ink-950/60 flex items-center justify-between shrink-0">
-          <span className="text-xs text-ink-500">
+        <div className={`p-4 border-t flex items-center justify-between shrink-0 ${T.footer}`}>
+          <span className={`text-xs ${T.footerText}`}>
             Recorded at {new Date(inspection.created_at).toLocaleString()}
           </span>
           <button
             onClick={onClose}
-            className="btn btn-ghost text-xs bg-ink-800 text-ink-100 hover:bg-ink-700"
+            className={`btn text-xs ${T.footerClose}`}
           >
             Close
           </button>

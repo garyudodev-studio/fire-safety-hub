@@ -40,7 +40,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentItem | null>(null);
   
   const [checklist, setChecklist] = useState<EquipmentChecklist | null>(null);
-  const [answers, setAnswers] = useState<Record<string, 'YES' | 'NO'>>({});
+  const [answers, setAnswers] = useState<Record<string, 'YES' | 'NO' | 'NA'>>({});
   
   const [equipmentPhotoUrl, setEquipmentPhotoUrl] = useState<string | null>(null);
   const [checklistPhotoUrl, setChecklistPhotoUrl] = useState<string | null>(null);
@@ -49,10 +49,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     new Date().toISOString().split('T')[0]
   );
   
-  // Auto calculated Week and Month/Year states
-  const [week, setWeek] = useState<string>('Week 1');
-  const [monthYear, setMonthYear] = useState<string>('');
-  
+  // Auto calculated Week and Month/Year derived from Inspection Date
+  const dateParts = inspectionDate.split('-');
+  const week = dateParts.length === 3 ? `Week ${Math.min(4, Math.ceil(parseInt(dateParts[2], 10) / 7))}` : 'Week 1';
+  const monthYear = dateParts.length === 3 ? `${dateParts[1]}/${dateParts[0]}` : '';
+
   const [remarks, setRemarks] = useState('');
   const [actionTaken, setActionTaken] = useState('');
 
@@ -61,28 +62,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLockedInspector, setIsLockedInspector] = useState(false);
 
+  // Tracks whether the selected equipment has already been inspected in the current month+week
+  const [duplicate, setDuplicate] = useState<{ inspector: string; date: string } | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+
   const supabase = getSupabaseClient();
-
-  // Auto calculate Week and Month/Year whenever Inspection Date changes
-  const updateWeekAndMonthYear = (dateStr: string) => {
-    if (!dateStr) return;
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      const year = parts[0];
-      const month = parts[1];
-      const day = parseInt(parts[2], 10);
-      
-      const calculatedWeek = `Week ${Math.min(4, Math.ceil(day / 7))}`;
-      const calculatedMonthYear = `${month}/${year}`;
-      
-      setWeek(calculatedWeek);
-      setMonthYear(calculatedMonthYear);
-    }
-  };
-
-  useEffect(() => {
-    updateWeekAndMonthYear(inspectionDate);
-  }, [inspectionDate]);
 
   // Scroll to top of modal container whenever component mounts or selected equipment changes
   useEffect(() => {
@@ -122,7 +106,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           .from('profiles')
           .select('role, pic:pic_id(name)')
           .eq('id', sessionData.session.user.id)
-          .single() as any; // Using any because nested join typing can be strict
+          .single();
           
         if (profile?.role === 'inspector' && profile.pic?.name) {
           lockedName = profile.pic.name;
@@ -142,7 +126,32 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     };
 
     loadData();
-  }, []);
+  }, [supabase]);
+
+  // Detect if the selected equipment was already inspected in the same month + week
+  useEffect(() => {
+    if (!selectedEquipment || !monthYear || !week) return;
+
+    let cancelled = false;
+    const checkDuplicate = async () => {
+      setCheckingDuplicate(true);
+      setDuplicate(null);
+      const { data } = await supabase
+        .from('inspections')
+        .select('inspector_name, inspection_date')
+        .eq('equipment_id', selectedEquipment.id)
+        .eq('month_year', monthYear)
+        .eq('week', week)
+        .maybeSingle();
+      if (!cancelled) {
+        if (data) setDuplicate({ inspector: data.inspector_name, date: data.inspection_date });
+        setCheckingDuplicate(false);
+      }
+    };
+
+    checkDuplicate();
+    return () => { cancelled = true; };
+  }, [selectedEquipment, week, monthYear, supabase]);
 
   // Unique list of facilities/factories for filter dropdown
   const uniqueFacilities = Array.from(
@@ -154,34 +163,36 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     new Set(masterlist.map((e) => e.type).filter(Boolean))
   ).sort();
 
-  // Update checklist and preselect inspector when equipment is selected
-  useEffect(() => {
-    if (selectedEquipment) {
-      const cl = getChecklistForType(selectedEquipment.type);
-      setChecklist(cl);
+  const applyEquipmentSelection = (item: EquipmentItem | null) => {
+    setSelectedEquipment(item);
 
-      // Auto-select assigned PIC if available and inspector is not locked
-      if (!isLockedInspector) {
-        if (selectedEquipment.pic_1?.name) {
-          setInspectorName(selectedEquipment.pic_1.name);
-        } else if (selectedEquipment.pic_2?.name) {
-          setInspectorName(selectedEquipment.pic_2.name);
-        }
-      }
-
-      // Reset answers to expected normal answer (YES or NO)
-      const initialAnswers: Record<string, 'YES' | 'NO'> = {};
-      cl.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          initialAnswers[item.id] = item.expectedAnswer || 'YES';
-        });
-      });
-      setAnswers(initialAnswers);
-    } else {
+    if (!item) {
       setChecklist(null);
       setAnswers({});
+      return;
     }
-  }, [selectedEquipment]);
+
+    const cl = getChecklistForType(item.type);
+    setChecklist(cl);
+
+    // Auto-select assigned PIC if available and inspector is not locked
+    if (!isLockedInspector) {
+      if (item.pic_1?.name) {
+        setInspectorName(item.pic_1.name);
+      } else if (item.pic_2?.name) {
+        setInspectorName(item.pic_2.name);
+      }
+    }
+
+    // Reset answers to expected normal answer (YES or NO)
+    const initialAnswers: Record<string, 'YES' | 'NO' | 'NA'> = {};
+    cl.sections.forEach((section) => {
+      section.items.forEach((checklistItem) => {
+        initialAnswers[checklistItem.id] = checklistItem.expectedAnswer || 'YES';
+      });
+    });
+    setAnswers(initialAnswers);
+  };
 
   // Filter equipment based on Facility, Type, and Search Query
   const filteredEquipment = masterlist.filter((item) => {
@@ -200,17 +211,17 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   });
 
   const handleSelectEquipment = (item: EquipmentItem) => {
-    setSelectedEquipment(item);
+    applyEquipmentSelection(item);
     setSearchQuery('');
   };
 
-  const handleAnswerChange = (itemId: string, value: 'YES' | 'NO') => {
+  const handleAnswerChange = (itemId: string, value: 'YES' | 'NO' | 'NA') => {
     setAnswers((prev) => ({ ...prev, [itemId]: value }));
   };
 
   const handleMarkAllNormal = () => {
     if (!checklist) return;
-    const allNormal: Record<string, 'YES' | 'NO'> = {};
+    const allNormal: Record<string, 'YES' | 'NO' | 'NA'> = {};
     checklist.sections.forEach((sec) => {
       sec.items.forEach((item) => {
         allNormal[item.id] = item.expectedAnswer || 'YES';
@@ -219,12 +230,14 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setAnswers(allNormal);
   };
 
-  // Check if all items match their expected normal answer
+  // Check if all items match their expected normal answer ('NA' counts as normal when allowed)
   const isAllPass = checklist
     ? checklist.sections.every((sec) =>
         sec.items.every((item) => {
           const expected = item.expectedAnswer || 'YES';
-          return answers[item.id] === expected;
+          const value = answers[item.id];
+          if (item.allowNA && value === 'NA') return true;
+          return value === expected;
         })
       )
     : false;
@@ -263,6 +276,23 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     setLoading(true);
 
     try {
+      // 0. Prevent duplicate: same equipment + same month/year + same week is already inspected
+      const { data: existing } = await supabase
+        .from('inspections')
+        .select('inspector_name, inspection_date')
+        .eq('equipment_id', selectedEquipment.id)
+        .eq('month_year', monthYear)
+        .eq('week', week)
+        .maybeSingle();
+
+      if (existing) {
+        setErrorMsg(
+          `Cannot save — ${selectedEquipment.no_id} was already inspected for ${monthYear} (${week}) by ${existing.inspector_name} on ${existing.inspection_date}. Each equipment can only be inspected once per week.`
+        );
+        setLoading(false);
+        return;
+      }
+
       // 1. Upload photos to Supabase Storage `inspection_photos`
       let uploadedEquipmentPhotoUrl = equipmentPhotoUrl;
       if (equipmentPhotoUrl.startsWith('data:image')) {
@@ -339,6 +369,24 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         </div>
       )}
 
+      {selectedEquipment && duplicate && (
+        <div className="rounded-2xl border border-amber-900/60 bg-amber-950/40 p-4 text-sm text-amber-300 flex items-start gap-3 animate-fade">
+          <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div>
+            <p className="font-semibold">Already inspected this period</p>
+            <p className="text-xs mt-0.5 text-amber-400/90">
+              {selectedEquipment.no_id} was already inspected for <span className="font-semibold">{monthYear} ({week})</span> by{' '}
+              <span className="font-semibold">{duplicate.inspector}</span> on <span className="font-semibold">{duplicate.date}</span>.
+              Duplicate inspections are not allowed — change the equipment or the inspection date.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Step 1: Filter & Select Masterlist Equipment */}
       <div className="panel p-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -352,7 +400,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           {selectedEquipment && (
             <button
               type="button"
-              onClick={() => setSelectedEquipment(null)}
+              onClick={() => applyEquipmentSelection(null)}
               className="text-xs text-ember-400 hover:text-ember-300 underline"
             >
               Change Selection
@@ -526,7 +574,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                         </div>
 
                         {/* Yes / No Toggle Buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {/* YES Button */}
                           <button
                             type="button"
@@ -556,6 +604,22 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                           >
                             <span>{!isYesNormal ? '✓' : '✕'}</span> TIDAK / NO {!isYesNormal ? '(Normal)' : '(Defect)'}
                           </button>
+
+                          {/* NA Button (only for items that allow "Not Applicable", e.g. Emergency Lamp without an exit lamp) */}
+                          {item.allowNA && (
+                            <button
+                              type="button"
+                              onClick={() => handleAnswerChange(item.id, 'NA')}
+                              className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                                currentVal === 'NA'
+                                  ? 'bg-sky-600/20 text-sky-300 border-sky-500/50 shadow-md shadow-sky-950/40'
+                                  : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
+                              }`}
+                              title="Tidak memiliki komponen ini / Not Applicable"
+                            >
+                              <span>—</span> TIDAK ADA / N/A
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -724,7 +788,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
 
               <button
                 type="submit"
-                disabled={loading || !equipmentPhotoUrl || !checklistPhotoUrl}
+                disabled={loading || !equipmentPhotoUrl || !checklistPhotoUrl || !!duplicate || checkingDuplicate}
                 className="btn btn-primary text-xs px-6 py-2.5 flex items-center justify-center gap-2 w-full md:w-auto"
               >
                 {loading ? (
@@ -732,6 +796,10 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     Submitting...
                   </>
+                ) : !equipmentPhotoUrl || !checklistPhotoUrl ? (
+                  'Complete & Save Inspection'
+                ) : duplicate ? (
+                  'Already Inspected — Save Blocked'
                 ) : (
                   'Complete & Save Inspection'
                 )}
