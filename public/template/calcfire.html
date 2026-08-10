@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fire Protection System Calculator & Guide</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #c0392b;
+    --primary-dark: #922b21;
+    --secondary: #2c3e50;
+    --accent: #f39c12;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --muted: #7f8c8d;
+    --success: #27ae60;
+    --warning: #e67e22;
+    --info: #2980b9;
+    --border: #e1e5ea;
+    --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+    color: white;
+    padding: 25px 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+  }
+  header h1 { font-size: 24px; margin-bottom: 5px; }
+  header p { font-size: 13px; opacity: 0.9; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 25px 20px; }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    background: var(--card);
+    padding: 8px;
+    border-radius: 10px 10px 0 0;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    padding: 12px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 7px;
+    transition: all 0.25s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab-btn:hover { background: #f0f3f5; color: var(--secondary); }
+  .tab-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 3px 8px rgba(192,57,43,0.35);
+  }
+  .tab-content {
+    background: var(--card);
+    padding: 30px;
+    border-radius: 0 0 10px 10px;
+    box-shadow: var(--shadow);
+    display: none;
+    animation: fade 0.4s;
+  }
+  .tab-content.active { display: block; }
+  @keyframes fade { from {opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+
+  h2 { color: var(--primary-dark); margin-bottom: 15px; font-size: 20px; border-bottom: 3px solid var(--accent); padding-bottom: 8px; display: inline-block; }
+  h3 { color: var(--secondary); margin: 20px 0 10px; font-size: 16px; }
+  h4 { color: var(--primary); margin: 15px 0 8px; font-size: 14px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+  .form-group { margin-bottom: 14px; }
+  label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--secondary); font-size: 13px; }
+  input, select, textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px; font-size: 14px;
+    font-family: inherit; transition: border-color 0.2s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(192,57,43,0.1); }
+
+  .btn {
+    background: var(--primary); color: white;
+    border: none; padding: 12px 24px;
+    border-radius: 6px; cursor: pointer;
+    font-size: 14px; font-weight: 600;
+    transition: all 0.2s; margin-top: 10px;
+  }
+  .btn:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+
+  .result {
+    background: linear-gradient(135deg, #f8f9fa, #fff);
+    border-left: 4px solid var(--primary);
+    padding: 18px; margin-top: 20px;
+    border-radius: 6px;
+  }
+  .result-box {
+    background: #fff; padding: 15px; margin: 8px 0;
+    border-radius: 6px; border: 1px solid var(--border);
+  }
+  .result-box strong { color: var(--primary-dark); font-size: 16px; }
+  .result-value { font-size: 22px; font-weight: 700; color: var(--primary); margin: 5px 0; }
+  .result-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .info-card {
+    background: #f8f9fa; padding: 15px;
+    border-radius: 6px; margin: 10px 0;
+    border-left: 4px solid var(--info);
+  }
+  .warning-card { border-left-color: var(--warning); background: #fef9f2; }
+  .success-card { border-left-color: var(--success); background: #f0faf3; }
+  .danger-card { border-left-color: var(--primary); background: #fdf2f0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; background: white; }
+  th, td { padding: 10px 12px; text-align: left; border: 1px solid var(--border); }
+  th { background: var(--secondary); color: white; font-weight: 600; }
+  tr:nth-child(even) { background: #f8f9fa; }
+  tr:hover { background: #fdf2f0; }
+
+  .badge {
+    display: inline-block; padding: 3px 10px;
+    border-radius: 12px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge-light { background: #d4edda; color: #155724; }
+  .badge-ordinary { background: #fff3cd; color: #856404; }
+  .badge-high { background: #f8d7da; color: #721c24; }
+
+  .guide-section {
+    background: white; border-radius: 8px;
+    padding: 20px; margin-bottom: 18px;
+    box-shadow: var(--shadow); border-top: 4px solid var(--primary);
+  }
+  .guide-section h3 { margin-top: 0; }
+  .guide-section ul { margin: 10px 0 10px 20px; }
+  .guide-section li { margin-bottom: 6px; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 15px 0; }
+  .stat-box { background: linear-gradient(135deg, var(--secondary), #34495e); color: white; padding: 18px; border-radius: 8px; }
+  .stat-box .label { font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-box .value { font-size: 22px; font-weight: 700; margin-top: 5px; }
+  .stat-box.accent { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+  .stat-box.warning { background: linear-gradient(135deg, var(--accent), #d68910); }
+  .stat-box.success { background: linear-gradient(135deg, var(--success), #1e8449); }
+
+  .disclaimer {
+    background: #fff8e1; border: 2px dashed var(--accent);
+    padding: 12px; border-radius: 6px; margin-top: 20px;
+    font-size: 12px; color: #7d6608;
+  }
+  .formula { background: #ecf0f1; padding: 8px 12px; border-radius: 4px; font-family: 'Courier New', monospace; margin: 8px 0; font-size: 13px; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔥 Fire Protection System Calculator & Guide</h1>
+  <p>Hydrant Hydraulics · Fire Extinguisher (SNI) · Fire Alarm · Regulatory Compliance Reference</p>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="openTab('hydrant')">💧 Hydrant Hydraulic</button>
+    <button class="tab-btn" onclick="openTab('extinguisher')">🧯 Fire Extinguisher (SNI)</button>
+    <button class="tab-btn" onclick="openTab('alarm')">🚨 Fire Alarm</button>
+    <button class="tab-btn" onclick="openTab('detector')">📡 Detector Guide</button>
+    <button class="tab-btn" onclick="openTab('ext-guide')">🧯 Extinguisher Guide (SNI)</button>
+    <button class="tab-btn" onclick="openTab('hydrant-guide')">💧 Hydrant Guide</button>
+    <button class="tab-btn" onclick="openTab('evac')">🚪 Evacuation Guide</button>
+  </div>
+
+  <!-- =================== HYDRANT CALCULATION =================== -->
+  <div id="hydrant" class="tab-content active">
+    <h2>Hydrant Hydraulic System Calculation</h2>
+    <p>Calculate required flow rate, pressure, pipe sizing and pump capacity based on <strong>NFPA 13/14</strong> & <strong>SNI / Permen PU No.26/2008</strong>.</p>
+
+    <div class="grid">
+      <div>
+        <h3>Input Parameters</h3>
+        <div class="form-group">
+          <label>Hazard Classification</label>
+          <select id="h-hazard">
+            <option value="light">Light Hazard (Office, School)</option>
+            <option value="ordinary1" selected>Ordinary Hazard Gr.1 (Retail, Dining)</option>
+            <option value="ordinary2">Ordinary Hazard Gr.2 (Warehouse, Factory)</option>
+            <option value="extra">Extra Hazard (Flammable storage)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Number of Hydrant Outlets Operating Simultaneously</label>
+          <input type="number" id="h-outlets" value="2" min="1">
+        </div>
+        <div class="form-group">
+          <label>Flow Rate per Outlet (LPM)</label>
+          <input type="number" id="h-flow" value="500">
+        </div>
+        <div class="form-group">
+          <label>Longest Pipe Length (m)</label>
+          <input type="number" id="h-length" value="150">
+        </div>
+        <div class="form-group">
+          <label>Pipe Internal Diameter (mm)</label>
+          <select id="h-diameter">
+            <option value="65">65 mm (2.5")</option>
+            <option value="80">80 mm (3")</option>
+            <option value="100" selected>100 mm (4")</option>
+            <option value="150">150 mm (6")</option>
+            <option value="200">200 mm (8")</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pipe Material (Hazen-Williams C factor)</label>
+          <select id="h-material">
+            <option value="100">Old Steel Pipe (C=100)</option>
+            <option value="120" selected>New Steel Pipe (C=120)</option>
+            <option value="150">PVC / HDPE (C=150)</option>
+            <option value="130">Cement Lined Ductile Iron (C=130)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Static Head / Elevation Difference (m)</label>
+          <input type="number" id="h-elevation" value="15">
+        </div>
+        <div class="form-group">
+          <label>Required Residual Pressure at Nozzle (bar)</label>
+          <input type="number" id="h-residual" value="3.5" step="0.1">
+        </div>
+        <button class="btn" onclick="calcHydrant()">Calculate Hydraulic</button>
+      </div>
+
+      <div>
+        <h3>Results</h3>
+        <div id="hydrant-result">
+          <div class="info-card">
+            <strong>Ready to calculate.</strong><br>
+            Fill in parameters and click "Calculate Hydraulic" to view results including flow, friction loss, pump head, and required tank capacity.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <h3>Reference Standards</h3>
+    <table>
+      <tr><th>Hazard Class</th><th>Min. Flow per Outlet</th><th>Min. Residual Pressure</th><th>Simultaneous Outlets</th></tr>
+      <tr><td>Light Hazard</td><td>500 LPM</td><td>1.5 bar</td><td>1</td></tr>
+      <tr><td>Ordinary Hazard Gr.1</td><td>500 LPM</td><td>2.5 bar</td><td>2</td></tr>
+      <tr><td>Ordinary Hazard Gr.2</td><td>750 LPM</td><td>2.5 bar</td><td>2</td></tr>
+      <tr><td>Extra Hazard</td><td>1000 LPM</td><td>3.5 bar</td><td>3</td></tr>
+    </table>
+
+    <div class="formula">
+      Hazen-Williams (SI): h<sub>f</sub> = 10.67 × L × Q<sup>1.852</sup> / (C<sup>1.852</sup> × d<sup>4.87</sup>)<br>
+      Where: h<sub>f</sub> = friction head loss (m), L = length (m), Q = flow (m³/s), C = roughness, d = internal dia (m)
+    </div>
+
+    <div class="disclaimer">
+      ⚠️ <strong>Disclaimer:</strong> Results are for preliminary estimation only. Final design must be verified by a licensed fire protection engineer and approved by the local Authority Having Jurisdiction (AHJ).
+    </div>
+  </div>
+
+  <!-- =================== FIRE EXTINGUISHER CALCULATION (SNI) =================== -->
+  <div id="extinguisher" class="tab-content">
+    <h2>Fire Extinguisher (APAR) Calculation - SNI 03-3989-2000</h2>
+    <p>Calculate required number, type, and placement of Dry Chemical Powder (DCP) extinguishers (APAR) based on <strong>SNI 03-3989-2000</strong> & Indonesian regulations.</p>
+
+    <div class="grid">
+      <div>
+        <h3>Building / Area Data</h3>
+        <div class="form-group">
+          <label>Total Floor Area (m²)</label>
+          <input type="number" id="e-area" value="1200">
+        </div>
+        <div class="form-group">
+          <label>Hazard Classification (Tingkat Bahaya Kebakaran)</label>
+          <select id="e-hazard">
+            <option value="light">Ringan / Light (Office, School, Church)</option>
+            <option value="ordinary" selected>Sedang / Ordinary (Retail, Warehouse B, Hotel)</option>
+            <option value="high">Tinggi / High (Workshop, Flammable storage, Kitchen)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fire Class Present (Kelas Kebakaran)</label>
+          <select id="e-class">
+            <option value="A">Class A (Solid combustibles: Wood, Paper)</option>
+            <option value="B">Class B (Flammable liquids: Gasoline, Oil)</option>
+            <option value="C">Class C (Electrical equipment)</option>
+            <option value="ABC" selected>Multi-class A/B/C (Standard DCP)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Maximum Travel Distance to APAR (m)</label>
+          <select id="e-travel">
+            <option value="20">20 m (Hazard Ringan - Class A)</option>
+            <option value="15" selected>15 m (Hazard Sedang - Class A)</option>
+            <option value="10">10 m (Hazard Tinggi / Class B)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Preferred APAR Size (kg DCP)</label>
+          <select id="e-size">
+            <option value="3">3 kg (Portable - Minim)</option>
+            <option value="6" selected>6 kg (Portable - Standar Umum)</option>
+            <option value="9">9 kg (Portable - Industri)</option>
+            <option value="12">12 kg (Trolley / Roda)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Number of Floors</label>
+          <input type="number" id="e-floors" value="1" min="1">
+        </div>
+        <button class="btn" onclick="calcExtinguisher()">Calculate Requirement</button>
+      </div>
+
+      <div>
+        <h3>Results</h3>
+        <div id="ext-result">
+          <div class="info-card">
+            <strong>Ready to calculate.</strong><br>
+            Enter area and hazard details, then click calculate to determine the required number of APAR based on SNI 03-3989-2000.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <h3>SNI 03-3989-2000 Coverage Reference</h3>
+    <table>
+      <tr><th>Hazard Class</th><th>Max Coverage per APAR Unit</th><th>Max Travel Distance</th></tr>
+      <tr><td>Ringan (Light)</td><td>200 m²</td><td>20 m</td></tr>
+      <tr><td>Sedang (Ordinary)</td><td>150 m²</td><td>15 m</td></tr>
+      <tr><td>Tinggi (High)</td><td>100 m²</td><td>10 m</td></tr>
+    </table>
+
+    <div class="info-card warning-card">
+      <strong>⚠ Catatan SNI:</strong> Untuk daerah dengan cairan mudah terbakar (Class B) dengan kedalaman > 6mm, diperlukan perhitungan khusus berdasarkan luas permukaan cairan. Setiap APAR harus terlihat jelas, mudah dijangkau, dan dipasang dengan ketinggian handle antara 1000mm - 1500mm dari lantai.
+    </div>
+  </div>
+
+  <!-- =================== FIRE ALARM CALCULATION =================== -->
+  <div id="alarm" class="tab-content">
+    <h2>Fire Alarm System Calculation</h2>
+    <p>Calculate detector quantities, sounder coverage, and battery standby capacity per <strong>NFPA 72</strong> & <strong>BS 5839-1</strong>.</p>
+
+    <div class="grid">
+      <div>
+        <h3>Area & Detector Inputs</h3>
+        <div class="form-group">
+          <label>Total Floor Area to Protect (m²)</label>
+          <input type="number" id="a-area" value="1500">
+        </div>
+        <div class="form-group">
+          <label>Ceiling Height (m)</label>
+          <input type="number" id="a-height" value="3.5" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Detector Type</label>
+          <select id="a-detector">
+            <option value="smoke" selected>Smoke Detector</option>
+            <option value="heat">Heat Detector (Fixed temp / ROR)</option>
+            <option value="multisensor">Multi-sensor (Smoke + Heat)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Building Category (BS 5839-1)</label>
+          <select id="a-category">
+            <option value="L1">L1 - Total protection (max life safety)</option>
+            <option value="L2">L2 - Added protection to L3</option>
+            <option value="L3" selected>L3 - Escape routes & adjacent rooms</option>
+            <option value="L4">L4 - Escape routes only</option>
+            <option value="L5">L5 - Specific risk areas</option>
+            <option value="P1">P1 - Property (whole building)</option>
+            <option value="P2">P2 - Property (high risk only)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Number of Manual Call Points needed estimate</label>
+          <input type="number" id="a-mcp" value="8">
+        </div>
+        <div class="form-group">
+          <label>Number of Sounders / Bells planned</label>
+          <input type="number" id="a-sounders" value="10">
+        </div>
+
+        <h3 style="margin-top:20px;">Battery / Power Supply</h3>
+        <div class="form-group">
+          <label>System Standby Current (A) - all quiescent loads</label>
+          <input type="number" id="a-standby" value="0.8" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Alarm Current (A) - all devices in alarm</label>
+          <input type="number" id="a-alarm" value="3.5" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Standby Duration (hours) - 24/72</label>
+          <select id="a-duration">
+            <option value="24" selected>24 hours (Category M/L)</option>
+            <option value="72">72 hours (Unmanned / Category P)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Alarm Duration (minutes)</label>
+          <input type="number" id="a-alarmdur" value="30">
+        </div>
+        <button class="btn" onclick="calcAlarm()">Calculate Fire Alarm</button>
+      </div>
+
+      <div>
+        <h3>Results</h3>
+        <div id="alarm-result">
+          <div class="info-card">
+            <strong>Ready to calculate.</strong><br>
+            Enter the area, detector, and battery parameters. Click calculate to view detector count, sounder verification, and battery sizing.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <h3>Detector Coverage Reference</h3>
+    <table>
+      <tr><th>Detector Type</th><th>Coverage Area</th><th>Max Radius</th><th>Max Ceiling Height</th></tr>
+      <tr><td>Smoke (Point)</td><td>81 m² (9×9m)</td><td>6.7 m</td><td>10.5 m</td></tr>
+      <tr><td>Heat (Point)</td><td>50 m² (7×7m)</td><td>5.3 m</td><td>7.5 m</td></tr>
+      <tr><td>Multi-sensor</td><td>81 m²</td><td>6.7 m</td><td>10.5 m</td></tr>
+      <tr><td>Beam Detector</td><td>Up to 1500 m²</td><td>30 m beam length</td><td>25 m</td></tr>
+    </table>
+
+    <div class="info-card">
+      <strong>Sound Pressure Level (SPL) Requirement:</strong> Minimum 65 dB(A) at all points in occupied areas, OR 5 dB(A) above ambient noise (whichever is greater). Minimum 75 dB(A) at bedhead in sleeping accommodation. Max 120 dB(A).
+    </div>
+  </div>
+
+  <!-- =================== DETECTOR GUIDE =================== -->
+  <div id="detector" class="tab-content">
+    <h2>Fire Detector Guide</h2>
+    <p>Selection, spacing, and placement regulations for fire detectors per NFPA 72, BS 5839-1, and SNI.</p>
+
+    <div class="guide-section">
+      <h3>📡 Smoke Detector</h3>
+      <ul>
+        <li><strong>Coverage:</strong> 81 m² per unit (9m × 9m grid) for ceiling height ≤ 6 m.</li>
+        <li><strong>Spacing:</strong> Maximum 9.1 m between detectors; within 4.55 m of any wall.</li>
+        <li><strong>Best suited:</strong> Offices, hotels, residential, hospitals, electronic rooms.</li>
+        <li><strong>Avoid:</strong> Kitchens, bathrooms, dusty/humid areas, near HVAC vents (min 1m away).</li>
+        <li><strong>Temperature range:</strong> 0°C to 38°C operating.</li>
+        <li><strong>Types:</strong> Ionization (fast flaming), Photoelectric (smoldering), Aspirating (VESDA - high sensitivity).</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🌡️ Heat Detector</h3>
+      <ul>
+        <li><strong>Coverage:</strong> 50 m² per unit (7m × 7m grid) for ceiling height ≤ 6 m.</li>
+        <li><strong>Spacing:</strong> Maximum 6.7 m between detectors.</li>
+        <li><strong>Types:</strong> Fixed temperature (57°C/79°C/93°C) or Rate-of-Rise (ROR).</li>
+        <li><strong>Best suited:</strong> Kitchens, boiler rooms, garages, dusty industrial areas where smoke detectors false-trigger.</li>
+        <li><strong>Max ceiling height:</strong> 7.5 m for point type; use linear/beam type for higher.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🔥 Flame Detector (UV/IR)</h3>
+      <ul>
+        <li><strong>Use:</strong> Flammable liquid/gas storage, aircraft hangars, fuel loading bays.</li>
+        <li><strong>Coverage:</strong> Cone of vision up to 30-60 m depending on fuel.</li>
+        <li><strong>Response:</strong> Sub-second detection of open flames.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🧲 Manual Call Point (MCP / Break Glass)</h3>
+      <ul>
+        <li><strong>Location:</strong> At all final exits, stairwell exits on each floor, escape routes.</li>
+        <li><strong>Spacing:</strong> Max 45 m travel distance between MCPs (BS 5839), or 30 m (NFPA where audibility limited).</li>
+        <li><strong>Mounting height:</strong> 1.4 m (±200 mm) from floor to operating element.</li>
+        <li><strong>Color:</strong> Red (Europe/Asia); White with red lettering (USA).</li>
+        <li><strong>Must be:</strong> Visible, unobstructed, weatherproof if external.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🔊 Sounders & Visual Indicators</h3>
+      <ul>
+        <li><strong>Min SPL:</strong> 65 dB(A) throughout, or 5 dB above ambient (max 120 dB).</li>
+        <li><strong>Sleeping areas:</strong> 75 dB(A) minimum at bedhead.</li>
+        <li><strong>Visual strobes:</strong> Required in noisy areas (>105 dB ambient), hearing-impaired areas, and per ADA.</li>
+        <li><strong>Sounder spacing:</strong> Typical 1 per 60-100 m² depending on construction.</li>
+        <li><strong>Tone:</strong> Distinct from other building signals; AS/NZS requires alternating 440Hz/525Hz in residential.</li>
+      </ul>
+    </div>
+
+    <div class="info-card warning-card">
+      <strong>Special Spacing Adjustments:</strong>
+      <ul style="margin-top:8px;">
+        <li>Ceiling height &gt; 6 m → reduce coverage by 20% per additional 1 m.</li>
+        <li>Beamed ceilings (beam depth &gt; 10% of ceiling height) → detector every beam pocket if beams &lt; 1.2 m apart.</li>
+        <li>Corridors → spacing may be increased along corridor axis, max 9.1 m between detectors.</li>
+        <li>High airflow rooms → additional detectors, mount ≥ 3× air change distance from supply diffuser.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- =================== EXTINGUISHER GUIDE (SNI) =================== -->
+  <div id="ext-guide" class="tab-content">
+    <h2>APAR (Alat Pemadam Api Ringan) Guide</h2>
+    <p>Panduan seleksi, penempatan, dan pemeliharaan APAR berdasarkan <strong>SNI 03-3989-2000</strong> dan Peraturan Dinas Pemadam Kebakaran Indonesia.</p>
+
+    <div class="guide-section">
+      <h3>🧯 Dry Chemical Powder (DCP) - ABC Type</h3>
+      <ul>
+        <li><strong>Gunanya untuk:</strong> Class A (Padat), B (Cair), C (Listrik) - Sangat serbaguna.</li>
+        <li><strong>Ukuran standar SNI:</strong> 3 kg, 6 kg, 9 kg (Portable); 12 kg, 25 kg, 50 kg (Trolley/Roda).</li>
+        <li><strong>Isi:</strong> Monoammonium phosphate (bubuk kuning).</li>
+        <li><strong>Jangkauan semprot:</strong> 3-5 meter untuk unit portable.</li>
+        <li><strong>Waktu semprot:</strong> 8-25 detik (tergantung ukuran).</li>
+        <li><strong>Tekanan:</strong> Bertekanan dalam (Stored pressure) dengan gas Nitrogen (N2).</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>📏 Persyaratan Penempatan (SNI 03-3989-2000)</h3>
+      <ul>
+        <li><strong>Jarak Tempuh (Travel Distance):</strong> Maksimal 20 m (Ringan), 15 m (Sedang), 10 m (Tinggi).</li>
+        <li><strong>Ketinggian Pemasangan:</strong> Handle pegangan antara 1.0 m s/d 1.5 m dari lantai.</li>
+        <li><strong>Jarak dari lantai:</strong> Bagian bawah APAR minimal 100 mm dari lantai.</li>
+        <li><strong>Visibilitas:</strong> Harus terlihat jelas; wajib ada rambu (tanda) "APAR" jika tertutup oleh furnitur/pilar.</li>
+        <li><strong>Aksesibilitas:</strong> Tidak boleh di belakang pintu terkunci; harus di jalur normal orang berjalan.</li>
+        <li><strong>Lokasi Strategis:</strong> Dekat pintu keluar, tangga darurat, dan di pintu masuk area bahaya.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>⚖️ Luas Layanan APAR per SNI</h3>
+      <table>
+        <tr><th>Tingkat Bahaya</th><th>Luas Liputan per Unit</th><th>Jarak Tempuh Maks</th><li></th></tr>
+        <tr><td>Ringan (Light)</td><td>200 m²</td><td>20 m</td></tr>
+        <tr><td>Sedang (Ordinary)</td><td>150 m²</td><td>15 m</td></tr>
+        <tr><td>Tinggi (High)</td><td>100 m²</td><td>10 m</td></tr>
+      </table>
+      <small><em>Catatan: Untuk APAR portable 6 kg DCP standar umumnya dipakai untuk luasan tersebut. Pastikan kapasitas daya pemadam (angka di tabung) memenuhi syarat minimal kelas kebakaran.</em></small>
+    </div>
+
+    <div class="guide-section">
+      <h3>🔧 Inspeksi & Pemeliharaan (Maintenance)</h3>
+      <ul>
+        <li><strong>Bulanan:</strong> Pengecekan visual oleh petugas K3/Gedung - posisi, akses, tekanan manometer (harus di zona hijau), segel tidak rusak.</li>
+        <li><strong>Tahunan:</strong> Inspeksi & perawatan oleh Vendor/Kontraktor Pemadam yang bersertifikat. Wajib diberi kartu/label perawatan.</li>
+        <li><strong>Isi Ulang (Refill):</strong> Maksimal 1 tahun sekali, atau segera setelah digunakan (meski hanya sebentar).</li>
+        <li><strong>Uji Tekan (Hydrostatic Test):</strong> Setiap 5 tahun untuk tabung DCP.</li>
+        <li><strong>Penggantian:</strong> Segera ganti jika tabung berkarat parah, manometer rusak, atau sudah 10 tahun sejak produksi.</li>
+      </ul>
+    </div>
+
+    <div class="info-card danger-card">
+      <strong>🚫 JANGAN gunakan DCP pada:</strong>
+      <ul style="margin-top:8px;">
+        <li>Kebakaran Logam (Class D - butuh agent khusus Class D)</li>
+        <li>Deep Fryer Minyak Goreng (Class K / F - gunakan Wet Chemical / Foam)</li>
+        <li>Elektronik presisi (Server/Data Center - gunakan Gas/Clean Agent, karena sisa bubuk DCP korosif dan merusak sirkuit)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- =================== HYDRANT GUIDE =================== -->
+  <div id="hydrant-guide" class="tab-content">
+    <h2>Hydrant System Guide</h2>
+    <p>Design and installation requirements per NFPA 13/14, SNI 03-1745-2000, and Permen PU No.26/2008.</p>
+
+    <div class="guide-section">
+      <h3>💧 System Components</h3>
+      <ul>
+        <li><strong>Water supply:</strong> City main, dedicated tank (min. 2-hour reserve), or natural source.</li>
+        <li><strong>Fire pump:</strong> Electric/diesel driven; sized for max demand + 10% margin.</li>
+        <li><strong>Jockey pump:</strong> Maintains system pressure to prevent fire pump cycling.</li>
+        <li><strong>Underground/overhead piping:</strong> Loop or grid for redundancy.</li>
+        <li><strong>Hydrant pillars:</strong> Wet or dry barrel; double-outlet type standard.</li>
+        <li><strong>Hose reels/cabinets:</strong> 19mm-25mm rubber hose, 30m length, 1.5 bar nozzle.</li>
+        <li><strong>Siamese connection (FDC):</strong> For fire department pumper to supplement system.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>📍 Hydrant Spacing & Coverage</h3>
+      <ul>
+        <li><strong>Indoor hydrant spacing:</strong> Max 38 m between pillars (NFPA 14).</li>
+        <li><strong>Hose coverage:</strong> Every point reachable by 30 m hose + 6 m spray.</li>
+        <li><strong>Outdoor hydrants (yard):</strong> Spaced max 90 m apart (Indonesian SNI).</li>
+        <li><strong>Distance to building:</strong> Max 60 m from any building entry point.</li>
+        <li><strong>Distance from roads:</strong> Max 7.5 m for fire department access.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>⚡ Pressure & Flow Requirements</h3>
+      <table>
+        <tr><th>Component</th><th>Min. Residual Pressure</th><th>Min. Flow</th></tr>
+        <tr><td>Hose Reel (25mm)</td><td>1.5 bar</td><td>30 LPM</td></tr>
+        <tr><td>Hydrant Pillar (2 outlets)</td><td>2.5 bar</td><td>500 LPM per outlet</td></tr>
+        <tr><td>Monitor / Water Cannon</td><td>5.0 bar</td><td>1200 LPM</td></tr>
+        <tr><td>Standpipe (Class I)</td><td>6.5 bar at top outlet</td><td>500 GPM (1893 LPM)</td></tr>
+        <tr><td>Standpipe (Class II)</td><td>4.5 bar at top outlet</td><td>100 GPM (378 LPM)</td></tr>
+      </table>
+    </div>
+
+    <div class="guide-section">
+      <h3>🔧 Pump Selection Criteria</h3>
+      <ul>
+        <li><strong>Rated flow:</strong> Equal to system demand (sum of simultaneous outlets + hose streams).</li>
+        <li><strong>Rated head:</strong> Overcome static lift + friction loss + residual pressure at hydraulically remote outlet.</li>
+        <li><strong>No overload:</strong> At 150% of rated flow, pump head ≥ 65% of rated head.</li>
+        <li><strong>Shutoff:</strong> Head at zero flow ≤ 140% rated.</li>
+        <li><strong>Power supply:</strong> Diesel driver preferred for reliability; electric pump requires backup generator.</li>
+        <li><strong>Controller:</strong> Automatic start on pressure drop; manual reset required.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🧪 Testing & Maintenance</h3>
+      <ul>
+        <li><strong>Weekly:</strong> Jockey pump run, fire pump churn test (no-flow) for 10 min.</li>
+        <li><strong>Monthly:</strong> Pump house inspection, control valve position checks.</li>
+        <li><strong>Quarterly:</strong> Main drain test, alarm valve trip test.</li>
+        <li><strong>Annual:</strong> Full flow test, hydrostatic test of new piping, fire pump performance curve verification.</li>
+        <li><strong>5-year:</strong> Internal inspection of valves, sprinkler sample testing.</li>
+      </ul>
+    </div>
+
+    <div class="info-card warning-card">
+      <strong>⚠️ Common Compliance Issues:</strong>
+      <ul style="margin-top:8px;">
+        <li>Insufficient water tank reserve (must sustain 2 hr for Ordinary Hazard, 3-4 hr for High Hazard).</li>
+        <li>Under-sized diesel fuel day tank (min. 8 hours of operation required).</li>
+        <li>Lack of jockey pump causing fire pump short cycling.</li>
+        <li>Pipework not looped - single line failures take out entire system.</li>
+        <li>Missing or inaccessible FDC (Siamese) connections.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- =================== EVACUATION GUIDE =================== -->
+  <div id="evac" class="tab-content">
+    <h2>Evacuation & Emergency Systems Guide</h2>
+    <p>Comprehensive guidance on evacuation routes, emergency doors, lighting, and exit signage per NFPA 101, BS 5266, ISO 16069.</p>
+
+    <div class="guide-section">
+      <h3>🚪 Emergency Exit Doors</h3>
+      <ul>
+        <li><strong>Minimum width:</strong> 0.9 m clear opening (1.2 m for high occupancy).</li>
+        <li><strong>Minimum height:</strong> 2.0 m.</li>
+        <li><strong>Door swing:</strong> Open outward in direction of escape travel.</li>
+        <li><strong>Panic hardware:</strong> Required for Assembly (A) / Educational (E) / Hazardous (H) occupancies - panic bar/latch operable with single motion.</li>
+        <li><strong>Self-closing & latching:</strong> Required for fire-rated doors (minimum FD30 / 30 min fire rating).</li>
+        <li><strong>Number of exits:</strong> Min 2 from every floor/room; more based on occupant load.</li>
+        <li><strong>Travel distance to exit:</strong> 30 m unsprinklered / 45 m sprinklered (ordinary hazard).</li>
+        <li><strong>Common path of travel:</strong> Max 12-22 m depending on occupancy (single direction before reaching two exits).</li>
+        <li><strong>Locks:</strong> Never lock from inside; electromagnetic locks must release on fire alarm.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🏃 Evacuation Routes</h3>
+      <ul>
+        <li><strong>Min corridor width:</strong> 1.1 m; 1.5 m for high occupancy.</li>
+        <li><strong>Stairway width:</strong> Min 1.1 m between handrails.</li>
+        <li><strong>Stair riser/tread:</strong> 180 mm max riser, 280 mm min tread.</li>
+        <li><strong>Max travel distance:</strong>
+          <ul>
+            <li>Office/Retail (sprinklered): 45 m</li>
+            <li>Office/Retail (unsprinklered): 30 m</li>
+            <li>Industrial (sprinklered): 90 m</li>
+            <li>Assembly (sprinklered): 60 m</li>
+          </ul>
+        </li>
+        <li><strong>Discharge:</strong> Exit must lead directly to exterior or protected stairway.</li>
+        <li><strong>Smoke-free escape:</strong> Protected shafts require pressurization or natural smoke ventilation.</li>
+        <li><strong>Aisles:</strong> Min 1.0 m clear; locked seating rows not permitted.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>💡 Emergency Lighting</h3>
+      <ul>
+        <li><strong>Required locations:</strong> All escape routes, stairways, changes of direction, fire-fighting equipment, exit doors, control rooms.</li>
+        <li><strong>Illuminance level:</strong>
+          <ul>
+            <li>Escape routes ≤ 2 m wide: min 1.0 lux at floor level.</li>
+            <li>High-risk areas: min 10 lux (or 10% of normal, whichever greater).</li>
+            <li>Open anti-panic areas: min 0.5 lux at floor.</li>
+          </ul>
+        </li>
+        <li><strong>Duration:</strong> Min 1 hour for small buildings; 3 hours for large/high-rise/sleeping risk.</li>
+        <li><strong>Response time:</strong> Must reach 50% illuminance within 5 sec, 100% within 60 sec.</li>
+        <li><strong>Mounting height:</strong> Min 2.0 m above floor for self-contained luminaires.</li>
+        <li><strong>Power source:</strong> Central battery system or individual battery packs; charged from mains and tested monthly.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🪧 Exit Signs & Lamps</h3>
+      <ul>
+        <li><strong>Visibility:</strong> From any point in escape route, a sign must be visible and unambiguous.</li>
+        <li><strong>Color:</strong> Green background with white symbol/lettering (ISO 7010 / international standard). US uses red.</li>
+        <li><strong>Symbol:</strong> Running man (ISO 7010 E001/E002) preferred over text-only signs.</li>
+        <li><strong>Mounting height:</strong> Top of sign ≥ 2.0 m above finished floor level.</li>
+        <li><strong>Illumination:</strong> Internally illuminated or externally lit to min 50 lux on sign face.</li>
+        <li><strong>Max viewing distance:</strong> 200 × panel height (m) for internally illuminated signs.</li>
+        <li><strong>Battery backup:</strong> Same duration as emergency lighting (1-3 hr).</li>
+        <li><strong>Directional arrows:</strong> Indicate direction to nearest exit; chevrons point toward exit at final exit.</li>
+        <li><strong>Photoluminescent:</strong> Permitted only with continuous charging light source ≥ 50 lux.</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>👥 Occupant Load Factors (NFPA 101)</h3>
+      <table>
+        <tr><th>Occupancy Type</th><th>m² per person</th><th>Exit Door Width per Person</th></tr>
+        <tr><td>Assembly (less concentrated)</td><td>1.4</td><td>5.1 mm</td></tr>
+        <tr><td>Assembly (concentrated seating)</td><td>0.65</td><td>5.1 mm</td></tr>
+        <tr><td>Business (Office)</td><td>9.3</td><td>5.1 mm</td></tr>
+        <tr><td>Educational (Classroom)</td><td>1.9</td><td>5.1 mm</td></tr>
+        <tr><td>Retail / Mercantile</td><td>3.7</td><td>5.1 mm</td></tr>
+        <tr><td>Industrial</td><td>9.3</td><td>5.1 mm</td></tr>
+        <tr><td>Residential (Hotel)</td><td>9.3</td><td>5.1 mm</td></tr>
+      </table>
+    </div>
+
+    <div class="info-card success-card">
+      <strong>✅ Evacuation Best Practices:</strong>
+      <ul style="margin-top:8px;">
+        <li>Conduct evacuation drills at least every 6 months (annually for low-risk buildings).</li>
+        <li>Maintain assembly points at safe distance (≥ 18 m from building).</li>
+        <li>Post evacuation floor plans at every floor entrance and elevator lobby.</li>
+        <li>Designate and train floor wardens (1 per 20 occupants).</li>
+        <li>Account for Persons with Reduced Mobility (PRM) via refuge areas with 2-way communication.</li>
+        <li>Test emergency lighting and exit signs monthly; record results in logbook.</li>
+      </ul>
+    </div>
+
+    <div class="disclaimer">
+      ⚠️ <strong>Note:</strong> Regulations vary by country and local Authority Having Jurisdiction (AHJ). This guide summarizes common international standards (NFPA, BS EN, ISO). Always consult local codes for compliance.
+    </div>
+  </div>
+</div>
+
+<script>
+function openTab(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+/* ============= HYDRANT CALCULATION ============= */
+function calcHydrant() {
+  const outlets = parseFloat(document.getElementById('h-outlets').value);
+  const flowPerOutlet = parseFloat(document.getElementById('h-flow').value);
+  const length = parseFloat(document.getElementById('h-length').value);
+  const diameter = parseFloat(document.getElementById('h-diameter').value) / 1000; // m
+  const C = parseFloat(document.getElementById('h-material').value);
+  const elevation = parseFloat(document.getElementById('h-elevation').value);
+  const residualBar = parseFloat(document.getElementById('h-residual').value);
+
+  const totalFlowLPM = outlets * flowPerOutlet;
+  const Q = totalFlowLPM / 60000; // m³/s
+
+  // Hazen-Williams head loss (m)
+  const hf = 10.67 * length * Math.pow(Q, 1.852) / (Math.pow(C, 1.852) * Math.pow(diameter, 4.87));
+
+  // Add 20% for fittings/valves losses
+  const hfTotal = hf * 1.2;
+
+  // Pressure conversion
+  const residualHead = residualBar * 10.197; // bar → m H2O
+  const totalHead = residualHead + elevation + hfTotal;
+  const pumpPressureBar = totalHead / 10.197;
+
+  // Pump flow margin 10%
+  const pumpFlow = totalFlowLPM * 1.1;
+
+  // Pump power (kW) - hydraulic
+  const pumpPowerKW = (pumpFlow * pumpPressureBar * 100) / (60 * 0.7 * 1000) * 9.81;
+
+  // Water tank: 2 hours reserve
+  const tankReserveLiters = totalFlowLPM * 60 * 2;
+
+  // Pipe velocity check
+  const pipeArea = Math.PI * Math.pow(diameter, 2) / 4;
+  const velocity = Q / pipeArea; // m/s
+
+  const result = document.getElementById('hydrant-result');
+  let velStatus = velocity <= 6 ? 'success-card' : 'warning-card';
+  let velMsg = velocity <= 6 ? '✓ Within acceptable range (≤ 6 m/s)' : '⚠ Exceeds 6 m/s - increase pipe size';
+
+  result.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-box accent">
+        <div class="label">Total System Demand</div>
+        <div class="value">${totalFlowLPM.toFixed(0)} LPM</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Required Pump Flow</div>
+        <div class="value">${pumpFlow.toFixed(0)} LPM</div>
+      </div>
+      <div class="stat-box warning">
+        <div class="label">Required Pump Head</div>
+        <div class="value">${pumpPressureBar.toFixed(2)} bar</div>
+      </div>
+      <div class="stat-box success">
+        <div class="label">Pump Hydraulic Power</div>
+        <div class="value">${pumpPowerKW.toFixed(2)} kW</div>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Friction Head Loss (incl. 20% fitting allowance)</div>
+      <div class="result-value">${hfTotal.toFixed(2)} m</div>
+      <small>Equivalent pressure loss: ${(hfTotal / 10.197).toFixed(2)} bar</small>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Pipe Velocity at Demand Flow</div>
+      <div class="result-value">${velocity.toFixed(2)} m/s</div>
+      <div class="info-card ${velStatus}">${velMsg}</div>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Recommended Water Tank Reserve (2 hr)</div>
+      <div class="result-value">${tankReserveLiters.toLocaleString()} L</div>
+      <small>= ${(tankReserveLiters/1000).toFixed(1)} m³</small>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Suggested Pump Rating</div>
+      <div class="result-value">${(pumpFlow/60).toFixed(1)} m³/min @ ${pumpPressureBar.toFixed(1)} bar</div>
+      <small>Select next standard pump size up; ensure diesel/electric driver rated ≥ ${Math.ceil(pumpPowerKW*1.25)} kW</small>
+    </div>
+
+    <div class="info-card">
+      <strong>📋 Design Summary:</strong><br>
+      Static head: ${elevation.toFixed(1)} m · Residual req: ${residualHead.toFixed(1)} m · Friction: ${hfTotal.toFixed(1)} m<br>
+      Total dynamic head (TDH): ${totalHead.toFixed(1)} m
+    </div>
+  `;
+}
+
+/* ============= FIRE EXTINGUISHER CALCULATION (SNI) ============= */
+function calcExtinguisher() {
+  const area = parseFloat(document.getElementById('e-area').value);
+  const hazard = document.getElementById('e-hazard').value;
+  const cls = document.getElementById('e-class').value;
+  const size = parseFloat(document.getElementById('e-size').value);
+  const floors = parseFloat(document.getElementById('e-floors').value);
+
+  // SNI 03-3989-2000 Coverage
+  let coverage, badge, hazardId;
+  if (hazard === 'light') { coverage = 200; badge = 'badge-light'; hazardId = 'Ringan (Light)'; }
+  else if (hazard === 'ordinary') { coverage = 150; badge = 'badge-ordinary'; hazardId = 'Sedang (Ordinary)'; }
+  else { coverage = 100; badge = 'badge-high'; hazardId = 'Tinggi (High)'; }
+
+  const perFloor = Math.ceil(area / coverage);
+  const total = perFloor * floors;
+
+  // SNI standard DCP capacities mapping (General ratings printed on SNI cylinders)
+  const sizeMap = {3:'8A/21B:C', 6:'13A/55B:C', 9:'21A/113B:C', 12:'34A/144B:C'};
+  const dcpRating = sizeMap[size];
+
+  const result = document.getElementById('ext-result');
+  result.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-box accent">
+        <div class="label">Total APAR Required</div>
+        <div class="value">${total} unit</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Per Lantai</div>
+        <div class="value">${perFloor} unit</div>
+      </div>
+      <div class="stat-box warning">
+        <div class="label">Luas Layanan per Unit</div>
+        <div class="value">${coverage} m²</div>
+      </div>
+      <div class="stat-box success">
+        <div class="label">Ukuran APAR DCP</div>
+        <div class="value">${size} kg</div>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Klasifikasi Bahaya (Hazard Class)</div>
+      <div class="result-value" style="font-size:18px;">
+        <span class="badge ${badge}">${hazardId}</span>
+      </div>
+      <small>Kelas Kebakaran: ${cls} · Rating APAR: ${dcpRating}</small>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Spesifikasi APAR Terpilih</div>
+      <div class="result-value">${size} kg DCP</div>
+      <small>${size >= 9 ? 'Anjuran: Trolley (beroda) untuk kemudahan mobilitas' : 'Tipe Portable (Di gantung/diletakkan di dinding)'}</small>
+    </div>
+
+    <div class="info-card">
+      <strong>📍 Rencana Penempatan (Placement Plan):</strong>
+      <ul style="margin: 8px 0 0 18px;">
+        <li>Distribusikan ${perFloor} unit APAR di setiap lantai (Total ${total} unit).</li>
+        <li>Lokasi: Dekat pintu keluar, tangga darurat, dan titik rawan bahaya.</li>
+        <li>Ketinggian pemasangan: Handle pegangan 1.0 s/d 1.5 meter dari lantai.</li>
+        <li>Pastikan jarak tempuh maksimal: ${hazard==='light'?'20 m':hazard==='ordinary'?'15 m':'10 m'}.</li>
+        <li>Wajib pasang rambu/tanda penunjuk "APAR" yang jelas.</li>
+      </ul>
+    </div>
+
+    <div class="info-card warning-card">
+      <strong>⚠️ Perhatian SNI:</strong> Jika area memiliki dapur komersial (deep fryer) atau logam mudah terbakar, APAR DCP tidak cukup. Wajib tambahkan APAR khusus (Wet Chemical Class K / Class D).
+    </div>
+  `;
+}
+
+/* ============= FIRE ALARM CALCULATION ============= */
+function calcAlarm() {
+  const area = parseFloat(document.getElementById('a-area').value);
+  const height = parseFloat(document.getElementById('a-height').value);
+  const detType = document.getElementById('a-detector').value;
+  const category = document.getElementById('a-category').value;
+  const mcpPlanned = parseFloat(document.getElementById('a-mcp').value);
+  const soundersPlanned = parseFloat(document.getElementById('a-sounders').value);
+
+  const standby = parseFloat(document.getElementById('a-standby').value);
+  const alarm = parseFloat(document.getElementById('a-alarm').value);
+  const standbyDur = parseFloat(document.getElementById('a-duration').value);
+  const alarmDur = parseFloat(document.getElementById('a-alarmdur').value) / 60;
+
+  // Coverage with height adjustment
+  let baseCoverage, radius, maxH;
+  if (detType === 'smoke') { baseCoverage = 81; radius = 6.7; maxH = 10.5; }
+  else if (detType === 'heat') { baseCoverage = 50; radius = 5.3; maxH = 7.5; }
+  else { baseCoverage = 81; radius = 6.7; maxH = 10.5; }
+
+  // Height adjustment: reduce coverage 20% per 1 m above 6 m
+  let adjustedCoverage = baseCoverage;
+  if (height > 6) {
+    const extraM = Math.min(height - 6, maxH - 6);
+    if (extraM > 0) adjustedCoverage = baseCoverage * Math.pow(0.8, extraM);
+  }
+
+  // Category L1/P1 = total coverage; others may be partial - assume full for safety
+  let coverageFactor = 1;
+  if (['L2','L3','L4','L5','P2'].includes(category)) coverageFactor = 0.7;
+
+  const effectiveArea = area * coverageFactor;
+  const detectorCount = Math.ceil(effectiveArea / adjustedCoverage);
+
+  // Sounder verification
+  const sounderCoverage = 100; // m² typical
+  const soundersNeeded = Math.ceil(effectiveArea / sounderCoverage);
+  const sounderOK = soundersPlanned >= soundersNeeded;
+
+  // Battery capacity: (standby × standbyDur) + (alarm × alarmDur) × 1.25 (de-rating) / 0.8 (depth of discharge)
+  const totalAh = ((standby * standbyDur) + (alarm * alarmDur)) * 1.25 / 0.8;
+  const recommendedBattery = Math.ceil(totalAh / 5) * 5; // round to nearest 5 Ah
+  const recommendedVoltage = 24;
+
+  const result = document.getElementById('alarm-result');
+  let detLabel = detType === 'smoke' ? 'Smoke Detectors' : detType === 'heat' ? 'Heat Detectors' : 'Multi-sensor Detectors';
+
+  result.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-box accent">
+        <div class="label">${detLabel}</div>
+        <div class="value">${detectorCount} units</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Manual Call Points</div>
+        <div class="value">${mcpPlanned} units</div>
+      </div>
+      <div class="stat-box warning">
+        <div class="label">Sounders Required</div>
+        <div class="value">${soundersNeeded} units</div>
+      </div>
+      <div class="stat-box success">
+        <div class="label">Battery Capacity</div>
+        <div class="value">${recommendedBattery} Ah</div>
+      </div>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Detector Coverage After Height Adjustment</div>
+      <div class="result-value">${adjustedCoverage.toFixed(1)} m²</div>
+      <small>Base ${baseCoverage} m² ${height > 6 ? `× 0.8^${(height-6).toFixed(1)} (height derate)` : '(no adjustment)'}</small>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Spacing Between Detectors</div>
+      <div class="result-value">${(radius * 2).toFixed(1)} m max</div>
+      <small>Within ${(radius).toFixed(1)} m of any wall</small>
+    </div>
+
+    <div class="result-box">
+      <div class="result-label">Battery Calculation</div>
+      <div class="result-value">${recommendedVoltage}V / ${recommendedBattery} Ah (min)</div>
+      <small>
+        Standby: ${standby} A × ${standbyDur} h = ${(standby*standbyDur).toFixed(2)} Ah<br>
+        Alarm: ${alarm} A × ${(alarmDur*60).toFixed(0)} min = ${(alarm*alarmDur).toFixed(2)} Ah<br>
+        Subtotal: ${((standby*standbyDur)+(alarm*alarmDur)).toFixed(2)} Ah<br>
+        With 25% margin + 80% DoD → <strong>${recommendedBattery} Ah</strong>
+      </small>
+    </div>
+
+    <div class="info-card ${sounderOK ? 'success-card' : 'warning-card'}">
+      <strong>🔊 Sounder Verification:</strong> ${sounderOK ? '✓ Planned '+soundersPlanned+' ≥ needed '+soundersNeeded : '⚠ Only '+soundersPlanned+' planned but '+soundersNeeded+' needed'}
+      <br><small>Ensure min 65 dB(A) at all locations; 75 dB(A) in sleeping areas.</small>
+    </div>
+
+    <div class="info-card">
+      <strong>📋 System Summary:</strong>
+      <ul style="margin:8px 0 0 18px;">
+        <li>Building category: ${category} (${coverageFactor*100}% area coverage assumed)</li>
+        <li>Total detection points: ${detectorCount + mcpPlanned} (auto + manual)</li>
+        <li>Recommend standby battery: 2× ${recommendedBattery} Ah, 24V (redundancy)</li>
+        <li>Loop/zone capacity: design loop for ${Math.ceil((detectorCount + mcpPlanned) * 1.3)} addresses (30% spare)</li>
+        <li>Provide UPS/generator for fire alarm panel power supply.</li>
+      </ul>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

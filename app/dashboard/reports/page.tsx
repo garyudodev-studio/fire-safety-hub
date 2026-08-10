@@ -4,8 +4,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
+import { printInspectionResults } from '@/app/lib/printInspectionResults';
+import { printResultReport } from '@/app/lib/printResultReport';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
+import { AlertModal, AlertState } from '@/app/components/ui/CustomModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface EquipmentPic {
+  id?: string;
+  name?: string | null;
+  phone?: string | null;
+  image_profile?: string | null;
+  image_contact?: string | null;
+}
 
 interface EquipmentMaster {
   id: string;
@@ -15,6 +27,8 @@ interface EquipmentMaster {
   facility: string | null;
   area: string | null;
   location: string | null;
+  pic_1?: EquipmentPic | null;
+  pic_2?: EquipmentPic | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -97,6 +111,22 @@ function PassRateRing({ rate }: { rate: number }) {
   );
 }
 
+function FilterRequired({ scope = 'data' }: { scope?: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      </span>
+      <p className="text-sm text-ink-300 font-medium">Select a filter to view {scope}</p>
+      <p className="text-xs text-ink-500 max-w-md">
+        Choose a <strong className="text-ink-300">Month</strong> (and optionally <strong className="text-ink-300">Week</strong>) above to see inspection results for that period.
+      </p>
+    </div>
+  );
+}
+
 /**
  * Equipment Type Breakdown
  * Shows: inspected_count / total_masterlist_count, plus pass count out of inspections
@@ -110,11 +140,14 @@ function TypeBreakdown({
   inspections,
   masterlist,
   periodText,
+  hasPeriodFilter,
 }: {
   inspections: InspectionRecord[];
   masterlist: EquipmentMaster[];
   periodText: string;
+  hasPeriodFilter: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   // Match inspected equipment by the real primary key and intersect with the masterlist,
   // so orphans / duplicate inspection rows never inflate coverage or pending counts.
   const inspectedIds = new Set(inspections.map((i) => i.equipment_id));
@@ -138,122 +171,167 @@ function TypeBreakdown({
     return { type: t, totalEquip, inspectedCount, passCount, notInspected, passRate, coverage, inspections: typeInspected };
   }).filter((r) => r.totalEquip > 0 || r.inspectedCount > 0);
 
-  if (rows.length === 0) return (
-    <div className="panel p-5 flex items-center justify-center text-ink-600 text-sm">
-      No equipment data available
-    </div>
-  );
-
   const maxEquip = Math.max(...rows.map((r) => Math.max(r.totalEquip, 1)));
 
   return (
-    <div className="panel p-5 space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-line pb-3">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-ink-200 flex items-center gap-2">
-            Equipment Coverage Breakdown
-            <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60 font-mono">
-              📅 Period: {periodText}
-            </span>
-          </h3>
-          <p className="text-xs text-ink-400 mt-1">
-            Masterlist total: <strong className="text-ink-100">{totalMasterlistAll}</strong> equipment · Inspected: <strong className="text-sky-300">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
-          </p>
-        </div>
-
-        <div>
-          {overallPending === 0 ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-900/60">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              100% Fully Inspected
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-900/60">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              {overallPending} Equipment Pending Inspection
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4 pt-1">
-        {rows.map((r) => {
-          const col = TYPE_COLORS[r.type] ?? '#8b91a0';
-          const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
-          const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
-          const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
-
-          return (
-            <div key={r.type} className="space-y-1.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
-                <span className="text-ink-200 font-semibold truncate">{r.type}</span>
-                <div className="flex items-center gap-2 shrink-0 text-ink-400">
-                  <span className="bg-ink-850 px-2 py-0.5 rounded border border-line">
-                    Inspected: <strong className="text-ink-100">{r.inspectedCount}</strong> / <span className="text-ink-300">{r.totalEquip} Masterlist Total</span>
-                  </span>
-                  {r.passRate !== null && (
-                    <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
-                  )}
-                  {r.notInspected > 0 ? (
-                    <span className="text-amber-400 font-bold bg-amber-950/50 border border-amber-900/50 px-2 py-0.5 rounded text-[11px]">
-                      {r.notInspected} Not Yet Inspected
-                    </span>
-                  ) : (
-                    <span className="text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-900/50 px-2 py-0.5 rounded text-[11px]">
-                      ✓ Complete
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Three-layer bar */}
-              <div className="relative h-3 rounded-full bg-ink-800 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
-                {/* layer 1: inspected portion */}
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
-                />
-                {/* layer 2: pass portion */}
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
-                />
-              </div>
-
-              {/* Coverage % details */}
-              <div className="flex items-center justify-between text-[11px] text-ink-500">
-                <span>
-                  {r.coverage}% of total masterlist equipment inspected in this period
-                </span>
-                {r.notInspected > 0 && (
-                  <span className="text-amber-400">
-                    {r.notInspected} equipment remaining for this period
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Alert banner if pending items remain */}
-      {overallPending > 0 && (
-        <div className="mt-3 rounded-xl bg-amber-950/40 border border-amber-900/50 p-3.5 text-xs text-amber-300 flex items-start gap-2.5">
-          <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    <div className="panel overflow-hidden">
+      {/* ── Toggle header (always visible) ── */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.03]"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <svg
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            className={`shrink-0 text-ink-500 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
+          >
+            <polyline points="9 18 15 12 9 6" />
           </svg>
-          <div>
-            <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
-            <p className="mt-0.5 text-amber-300/80">
-              <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
-              Ensure all equipment items receive inspection.
+          <div className="min-w-0">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-200 flex items-center gap-2">
+              Equipment Coverage Breakdown
+              <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60 font-mono">
+                📅 Period: {periodText}
+              </span>
+            </h3>
+            <p className="text-[11px] text-ink-500 mt-0.5">
+              {hasPeriodFilter ? (
+                <>
+                  Masterlist total: <strong className="text-ink-300">{totalMasterlistAll}</strong> · Inspected:{' '}
+                  <strong className="text-sky-400">{uniqueAllInspected}/{totalMasterlistAll} ({overallCoverage}%)</strong>
+                </>
+              ) : (
+                'Select a month/week filter to view coverage data'
+              )}
             </p>
           </div>
+        </div>
+
+        {hasPeriodFilter && (
+          <span className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+            overallPending === 0
+              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-900/60'
+              : 'bg-amber-950/80 text-amber-300 border border-amber-900/60'
+          }`}>
+            {overallPending === 0 ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                100% Inspected
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {overallPending} Pending
+              </>
+            )}
+          </span>
+        )}
+      </button>
+
+      {/* ── Collapsible body ── */}
+      {expanded && (
+        <div className="px-5 pb-5 border-t border-line">
+          {!hasPeriodFilter ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center gap-2">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </span>
+              <p className="text-sm text-ink-300 font-medium">Select a filter to view coverage data</p>
+              <p className="text-xs text-ink-500 max-w-md">
+                Choose a <strong className="text-ink-300">Month</strong> (and optionally <strong className="text-ink-300">Week</strong>) above to see how equipment in the masterlist has been inspected for that period.
+              </p>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-8 flex items-center justify-center text-ink-600 text-sm">
+              No equipment data available for the selected filters.
+            </div>
+          ) : (
+            <div className="space-y-4 pt-4">
+              {rows.map((r) => {
+                const col = TYPE_COLORS[r.type] ?? '#8b91a0';
+                const trackW   = r.totalEquip  > 0 ? (r.totalEquip   / maxEquip) * 100 : 0;
+                const inspW    = r.totalEquip  > 0 ? (r.inspectedCount / r.totalEquip) * 100 : 0;
+                const passW    = r.inspectedCount > 0 ? (r.passCount / r.inspectedCount) * 100 : 0;
+
+                return (
+                  <div key={r.type} className="space-y-1.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+                      <span className="text-ink-200 font-semibold truncate">{r.type}</span>
+                      <div className="flex items-center gap-2 shrink-0 text-ink-400">
+                        <span className="bg-ink-850 px-2 py-0.5 rounded border border-line">
+                          Inspected: <strong className="text-ink-100">{r.inspectedCount}</strong> / <span className="text-ink-300">{r.totalEquip} Masterlist Total</span>
+                        </span>
+                        {r.passRate !== null && (
+                          <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
+                        )}
+                        {r.notInspected > 0 ? (
+                          <span className="text-amber-400 font-bold bg-amber-950/50 border border-amber-900/50 px-2 py-0.5 rounded text-[11px]">
+                            {r.notInspected} Not Yet Inspected
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-900/50 px-2 py-0.5 rounded text-[11px]">
+                            ✓ Complete
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Three-layer bar */}
+                    <div className="relative h-3 rounded-full bg-ink-800 overflow-hidden" style={{ width: `${Math.max(trackW, 100)}%`, maxWidth: '100%' }}>
+                      {/* layer 1: inspected portion */}
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${inspW}%`, backgroundColor: `${col}40` }}
+                      />
+                      {/* layer 2: pass portion */}
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${(inspW * passW) / 100}%`, backgroundColor: col }}
+                      />
+                    </div>
+
+                    {/* Coverage % details */}
+                    <div className="flex items-center justify-between text-[11px] text-ink-500">
+                      <span>
+                        {r.coverage}% of total masterlist equipment inspected in this period
+                      </span>
+                      {r.notInspected > 0 && (
+                        <span className="text-amber-400">
+                          {r.notInspected} equipment remaining for this period
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Alert banner if pending items remain */}
+              {overallPending > 0 && (
+                <div className="mt-3 rounded-xl bg-amber-950/40 border border-amber-900/50 p-3.5 text-xs text-amber-300 flex items-start gap-2.5">
+                  <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  <div>
+                    <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
+                    <p className="mt-0.5 text-amber-300/80">
+                      <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
+                      Ensure all equipment items receive inspection.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -307,7 +385,7 @@ function Pagination({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type TabKey = 'uninspected' | 'unsafe' | 'safe';
+type TabKey = 'uninspected' | 'unsafe' | 'safe' | 'report';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -318,6 +396,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printingReport, setPrintingReport] = useState(false);
+  const [alertModal, setAlertModal] = useState<AlertState | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -332,6 +413,7 @@ export default function ReportsPage() {
   const [unsafePage,  setUnsafePage]  = useState(1);
   const [safePage,    setSafePage]    = useState(1);
   const [uninspPage,  setUninspPage]  = useState(1);
+  const [reportPage,  setReportPage]  = useState(1);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   // ── Derived filter options from masterlist ──
@@ -365,7 +447,11 @@ export default function ReportsPage() {
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location'),
+          .select(`
+            id, no_id, type, entity, facility, area, location,
+            pic_1:pic_1_id(id, name, phone, image_profile, image_contact),
+            pic_2:pic_2_id(id, name, phone, image_profile, image_contact)
+          `),
         supabase
           .from('profiles')
           .select('role, entity, facility, pic:pic_id(entity, facility)')
@@ -474,6 +560,7 @@ export default function ReportsPage() {
     setUnsafePage(1);
     setSafePage(1);
     setUninspPage(1);
+    setReportPage(1);
   }
   // Reset facility when entity changes
   const [prevEntity, setPrevEntity] = useState(selectedEntity);
@@ -492,6 +579,7 @@ export default function ReportsPage() {
   const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
   const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
   const uninspSlice = useMemo(() => uninspectedRows.slice((uninspPage - 1) * PAGE_SIZE, uninspPage * PAGE_SIZE), [uninspectedRows, uninspPage]);
+  const reportSlice = useMemo(() => filteredInspections.slice((reportPage - 1) * PAGE_SIZE, reportPage * PAGE_SIZE), [filteredInspections, reportPage]);
 
   const setThisMonth = () => {
     const now = new Date();
@@ -506,6 +594,85 @@ export default function ReportsPage() {
   const periodText = selectedMonth
     ? `${formatMonthYear(selectedMonth)}${selectedWeek ? `, ${selectedWeek}` : ''}`
     : 'All Recorded Dates';
+
+  // Data is only shown once the user picks a period filter (month/week).
+  const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
+
+  // ── Print A4 inspection results via the form checklist templates ──
+  const equipmentById = useMemo(() => new Map(masterlist.map((e) => [e.id, e])), [masterlist]);
+
+  const runPrint = async (records: InspectionRecord[]) => {
+    if (records.length === 0) return;
+    setPrinting(true);
+    try {
+      // Pre-fetch digital signatures for the inspectors involved
+      const inspectorNames = Array.from(new Set(records.map((r) => r.inspector_name)));
+      const signatures: Record<string, string | null> = {};
+      for (const name of inspectorNames) {
+        const { data } = await supabase.from('pic').select('signature_url').eq('name', name).single();
+        signatures[name] = data?.signature_url || null;
+      }
+
+      // Join equipment-level details (area, location, PIC profiles) to each record
+      const printRecords = records.map((r) => {
+        const eq = equipmentById.get(r.equipment_id);
+        return {
+          ...r,
+          equipment: {
+            area: r.equipment?.area ?? eq?.area ?? null,
+            location: r.equipment?.location ?? eq?.location ?? null,
+            pic_1: eq?.pic_1 ?? null,
+            pic_2: eq?.pic_2 ?? null,
+          },
+        };
+      });
+
+      await printInspectionResults(printRecords, signatures);
+    } catch (err) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Print Error',
+        message: err instanceof Error ? err.message : 'Failed to generate printable inspection results.',
+        type: 'error',
+      });
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const handlePrintFiltered = () => {
+    if (filteredInspections.length === 0) return;
+    runPrint(filteredInspections);
+  };
+
+  const handlePrintSingle = (item: InspectionRecord) => {
+    runPrint([item]);
+  };
+
+  const handlePrintReport = async () => {
+    if (filteredInspections.length === 0) return;
+    setPrintingReport(true);
+    try {
+      await printResultReport({
+        records: filteredInspections,
+        entity: selectedEntity === 'All' ? 'All Entities' : selectedEntity,
+        facility: selectedFacility === 'All' ? 'All Facilities' : selectedFacility,
+        period: periodText,
+        safeCount,
+        unsafeCount,
+        passRate,
+      });
+    } catch (err) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Print Error',
+        message: err instanceof Error ? err.message : 'Failed to generate printable result report.',
+        type: 'error',
+      });
+    } finally {
+      setPrintingReport(false);
+    }
+  };
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -574,12 +741,26 @@ export default function ReportsPage() {
                           {item.remarks || <span className="italic text-ink-600">No remarks</span>}
                         </td>
                         <td className="td text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
-                            className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
-                          >
-                            Details
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handlePrintSingle(item); }}
+                              disabled={printing}
+                              className={`btn btn-ghost text-xs px-2.5 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                              title="Print A4 checklist for this inspection"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="6 9 6 2 18 2 18 9" />
+                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                <rect x="6" y="14" width="12" height="8" rx="1" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
+                              className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                            >
+                              Details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -676,6 +857,182 @@ export default function ReportsPage() {
     );
   };
 
+  // ★ Professional Inspection Result Report table
+  const renderReport = () => {
+    const entityLabel = selectedEntity === 'All' ? 'All Entities' : selectedEntity;
+    const facilityLabel = selectedFacility === 'All' ? 'All Facilities' : selectedFacility;
+
+    return (
+      <div>
+        {loading ? (
+          <div className="py-20 text-center text-ink-500 flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-700 border-t-ember-500" />
+            <p className="text-sm">Loading report…</p>
+          </div>
+        ) : reportSlice.length === 0 ? (
+          <div className="py-16 text-center text-ink-500">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-sky-950/50 text-sky-400">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+            </div>
+            <p className="text-sm">No inspection results match your filters.</p>
+          </div>
+        ) : (
+          <>
+            {/* ── Report header: logo + entity/facility + period ── */}
+            <div className="border-b border-line bg-ink-950/40 px-5 py-4">
+              <div className="flex items-center gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logoyj.jpeg"
+                  alt="Company logo"
+                  className="h-14 w-14 rounded-xl border border-line bg-white object-contain p-1 shrink-0"
+                  draggable={false}
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-bold tracking-tight text-ink-100">Inspection Result Report</h3>
+                  <p className="text-xs text-ink-400 mt-0.5">
+                    <span className="font-semibold text-ember-300">{entityLabel}</span>
+                    <span className="text-ink-500 mx-1.5">·</span>
+                    <span className="font-semibold text-ink-200">{facilityLabel}</span>
+                  </p>
+                  <p className="text-[11px] text-ink-500 mt-0.5">
+                    Period: <span className="text-ink-300">{periodText}</span> ·{' '}
+                    <span className="text-ink-300">{totalInspections}</span> inspection results
+                  </p>
+                </div>
+                <div className="flex items-end gap-3 shrink-0">
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${passRate >= 80 ? 'bg-emerald-950/70 text-emerald-300 border-emerald-900/60' : 'bg-amber-950/70 text-amber-300 border-amber-900/60'}`}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {passRate}% Pass Rate
+                    </span>
+                    <span className="text-[11px] text-ink-500">{safeCount} PASS · {unsafeCount} NEEDS ATTENTION</span>
+                  </div>
+                  <button
+                    onClick={handlePrintReport}
+                    disabled={printingReport || !hasPeriodFilter || filteredInspections.length === 0}
+                    className="btn btn-primary text-xs flex items-center gap-1.5 px-3 py-2"
+                    title="Print professional result report (A4 landscape)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 6 2 18 2 18 9" />
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                      <rect x="6" y="14" width="12" height="8" rx="1" />
+                    </svg>
+                    {printingReport ? 'Preparing…' : `Print Report (${filteredInspections.length})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Report table with inspection photos ── */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line bg-ink-950/40">
+                    <th className="th">Photo</th>
+                    <th className="th">Equipment ID</th>
+                    <th className="th">Type</th>
+                    <th className="th">Entity / Facility</th>
+                    <th className="th">Date / Period</th>
+                    <th className="th">Inspector</th>
+                    <th className="th">Status</th>
+                    <th className="th">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {reportSlice.map((item) => {
+                    const entity   = item.equipment?.entity   ?? '';
+                    const facility = item.equipment?.facility ?? '';
+                    const photos = (item.photo_url || '').split(',').map((p) => p.trim()).filter(Boolean);
+                    const isPass = item.status === 'PASS';
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setViewingRecord(item)}
+                        className={`transition-colors cursor-pointer ${isPass ? 'hover:bg-emerald-950/10' : 'hover:bg-rose-950/10'}`}
+                      >
+                        <td className="td">
+                          {photos.length > 0 ? (
+                            <ProtectedImage
+                              src={photos[0]}
+                              alt={`${item.equipment_no_id} inspection photo`}
+                              onPreview={() => setViewingRecord(item)}
+                              className="h-12 w-16 rounded-lg border border-line object-cover"
+                            />
+                          ) : (
+                            <span className="inline-flex h-12 w-16 items-center justify-center rounded-lg border border-line bg-ink-850 text-ink-600">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <circle cx="9" cy="9" r="2" />
+                                <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+                              </svg>
+                            </span>
+                          )}
+                        </td>
+                        <td className={`td font-bold ${isPass ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {item.equipment_no_id}
+                        </td>
+                        <td className="td">
+                          <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
+                            {item.equipment_type}
+                          </span>
+                        </td>
+                        <td className="td text-xs">
+                          {entity && <div className="text-ink-200 font-medium">{entity}</div>}
+                          {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
+                          {!entity && !facility && <span className="text-ink-600 italic">—</span>}
+                        </td>
+                        <td className="td text-xs text-ink-300">
+                          <div>{item.inspection_date}</div>
+                          <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
+                        </td>
+                        <td className="td text-xs text-ink-200">{item.inspector_name}</td>
+                        <td className="td">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            isPass
+                              ? 'bg-emerald-950/70 text-emerald-300 border-emerald-900/60'
+                              : 'bg-rose-950/70 text-rose-300 border-rose-900/60'
+                          }`}>
+                            {isPass ? (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                              </svg>
+                            )}
+                            {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                          </span>
+                        </td>
+                        <td className="td text-xs text-ink-400 max-w-[200px] truncate">
+                          {item.remarks || <span className="italic text-ink-600">No remarks</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={filteredInspections.length}
+              page={reportPage}
+              pageSize={PAGE_SIZE}
+              onChange={setReportPage}
+            />
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="p-4 md:p-8">
@@ -696,6 +1053,19 @@ export default function ReportsPage() {
                     Updated {lastFetched.toLocaleTimeString()}
                   </span>
                 )}
+                <button
+                  onClick={handlePrintFiltered}
+                  disabled={printing || !hasPeriodFilter || filteredInspections.length === 0}
+                  className="btn btn-primary text-xs flex items-center gap-1.5 px-3 py-2"
+                  title="Print A4 inspection results for the selected period"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" rx="1" />
+                  </svg>
+                  {printing ? 'Preparing…' : `Print Results (${filteredInspections.length})`}
+                </button>
                 <button
                   onClick={() => { setLoading(true); setReloadTrigger((t) => t + 1); }} disabled={loading}
                   className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-2"
@@ -786,25 +1156,32 @@ export default function ReportsPage() {
           </div>
 
           {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
-            <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
-            <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-400" borderColor="border-emerald-900/30" />
-            <KpiCard
-              label="Not Inspected"
-              value={notInspectedCount}
-              sub={`of ${totalMasterlistCount} total equipment`}
-              color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
-              borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
-            />
-            <PassRateRing rate={passRate} />
-          </div>
+          {hasPeriodFilter ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
+              <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
+              <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-400" borderColor="border-emerald-900/30" />
+              <KpiCard
+                label="Not Inspected"
+                value={notInspectedCount}
+                sub={`of ${totalMasterlistCount} total equipment`}
+                color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
+                borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
+              />
+              <PassRateRing rate={passRate} />
+            </div>
+          ) : (
+            <div className="panel">
+              <FilterRequired scope="report metrics" />
+            </div>
+          )}
 
           {/* ── Coverage Breakdown ── */}
           <TypeBreakdown
             inspections={filteredInspections}
             masterlist={filteredMasterlist}
             periodText={periodText}
+            hasPeriodFilter={hasPeriodFilter}
           />
 
           {/* ── Tabbed Table ── */}
@@ -822,7 +1199,7 @@ export default function ReportsPage() {
                 </svg>
                 Uninspected Equipment
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-950/80 text-amber-300' : 'bg-ink-800 text-ink-500'}`}>
-                  {notInspectedCount}
+                  {hasPeriodFilter ? notInspectedCount : '–'}
                 </span>
               </button>
 
@@ -838,7 +1215,7 @@ export default function ReportsPage() {
                 </svg>
                 Unsafe Conditions
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-950/80 text-rose-300' : 'bg-ink-800 text-ink-500'}`}>
-                  {unsafeCount}
+                  {hasPeriodFilter ? unsafeCount : '–'}
                 </span>
               </button>
 
@@ -854,7 +1231,24 @@ export default function ReportsPage() {
                 </svg>
                 Safe Conditions
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-950/80 text-emerald-300' : 'bg-ink-800 text-ink-500'}`}>
-                  {safeCount}
+                  {hasPeriodFilter ? safeCount : '–'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('report')}
+                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'report' ? 'border-sky-500 text-sky-400' : 'border-transparent text-ink-500 hover:text-ink-300'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" />
+                </svg>
+                Result Report
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'report' ? 'bg-sky-950/80 text-sky-300' : 'bg-ink-800 text-ink-500'}`}>
+                  {hasPeriodFilter ? totalInspections : '–'}
                 </span>
               </button>
             </div>
@@ -864,20 +1258,28 @@ export default function ReportsPage() {
                 ? 'text-amber-400 bg-amber-950/10'
                 : activeTab === 'unsafe'
                   ? 'text-rose-400 bg-rose-950/10'
-                  : 'text-emerald-400 bg-emerald-950/10'
+                  : activeTab === 'safe'
+                    ? 'text-emerald-400 bg-emerald-950/10'
+                    : 'text-sky-400 bg-sky-950/10'
             }`}>
               {activeTab === 'uninspected'
                 ? '⚠️ Masterlist equipment not yet inspected'
                 : activeTab === 'unsafe'
                   ? '⚠️ Requires immediate follow-up'
-                  : '✅ Equipment in safe condition'}
+                  : activeTab === 'safe'
+                    ? '✅ Equipment in safe condition'
+                    : '📄 Professional inspection result report with photos'}
             </div>
 
-            {activeTab === 'uninspected'
+            {!hasPeriodFilter ? (
+              <FilterRequired scope="inspection results" />
+            ) : activeTab === 'uninspected'
               ? renderUninspectedTable()
               : activeTab === 'unsafe'
                 ? renderTable(unsafeSlice, 'unsafe', unsafePage, setUnsafePage)
-                : renderTable(safeSlice,   'safe',   safePage,   setSafePage)}
+                : activeTab === 'safe'
+                  ? renderTable(safeSlice,   'safe',   safePage,   setSafePage)
+                  : renderReport()}
           </div>
         </div>
       </div>
@@ -886,6 +1288,8 @@ export default function ReportsPage() {
         inspection={viewingRecord}
         onClose={() => setViewingRecord(null)}
       />
+
+      <AlertModal state={alertModal} onClose={() => setAlertModal(null)} />
     </>
   );
 }

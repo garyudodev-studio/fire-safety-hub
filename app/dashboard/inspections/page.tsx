@@ -27,6 +27,64 @@ function formatMonthYear(monthYear: string): string {
   return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
 }
 
+function FilterRequired({ scope = 'data' }: { scope?: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      </span>
+      <p className="text-sm text-ink-300 font-medium">Select a filter to view {scope}</p>
+      <p className="text-xs text-ink-500 max-w-md">
+        Choose a <strong className="text-ink-300">Month</strong> (and optionally <strong className="text-ink-300">Week</strong>) above to see inspection logs for that period.
+      </p>
+    </div>
+  );
+}
+
+function KpiCard({
+  label, value, sub, color = 'text-ink-100', borderColor = '',
+}: {
+  label: string; value: string | number; sub?: string;
+  color?: string; borderColor?: string;
+}) {
+  return (
+    <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <span className={`text-4xl font-bold mt-1 ${color}`}>{value}</span>
+      {sub && <span className="text-xs text-ink-500 mt-0.5">{sub}</span>}
+    </div>
+  );
+}
+
+function PassRateRing({ rate }: { rate: number }) {
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (rate / 100) * circ;
+  const color = rate >= 80 ? '#34d399' : rate >= 50 ? '#fbbf24' : '#f87171';
+  return (
+    <div className="panel p-5 flex flex-col items-center justify-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
+      <div className="relative flex items-center justify-center">
+        <svg width="96" height="96" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+          <circle
+            cx="48" cy="48" r={r}
+            fill="none" stroke={color} strokeWidth="8"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            transform="rotate(-90 48 48)"
+            style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
+          />
+        </svg>
+        <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
+      </div>
+      <span className="text-xs text-ink-500">Health score</span>
+    </div>
+  );
+}
+
 export default function InspectionsPage() {
   const router = useRouter();
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
@@ -175,6 +233,9 @@ export default function InspectionsPage() {
   const needsAttentionCount = filteredInspections.filter((i) => i.status !== 'PASS').length;
   const passRate = totalInspections > 0 ? Math.round((passCount / totalInspections) * 100) : 100;
 
+  // Data is only shown once the user picks a period filter (month/week).
+  const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
+
   // Reset week when month changes
   const [prevMonth, setPrevMonth] = useState(selectedMonth);
   if (prevMonth !== selectedMonth) {
@@ -225,33 +286,6 @@ export default function InspectionsPage() {
               </svg>
               Perform New Inspection
             </button>
-          </div>
-
-          {/* Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Total Inspections</span>
-              <span className="text-2xl font-bold text-ink-100 mt-2">{totalInspections}</span>
-              <span className="text-xs text-ink-400 mt-1">Logged records</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
-              <span className="text-2xl font-bold text-emerald-400 mt-2">{passRate}%</span>
-              <span className="text-xs text-ink-400 mt-1">{passCount} passed items</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Needs Attention</span>
-              <span className="text-2xl font-bold text-rose-400 mt-2">{needsAttentionCount}</span>
-              <span className="text-xs text-ink-400 mt-1">Defects flagged</span>
-            </div>
-
-            <div className="panel p-4 flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Checklist Standard</span>
-              <span className="text-lg font-bold text-ember-400 mt-2">100% Yes/No</span>
-              <span className="text-xs text-ink-400 mt-1">Photo verified</span>
-            </div>
           </div>
 
           {/* Filters & Search Bar */}
@@ -370,8 +404,44 @@ export default function InspectionsPage() {
             </div>
           </div>
 
+          {/* Metrics Cards */}
+          {hasPeriodFilter ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Total Inspections" value={totalInspections} sub="Logged records" color="text-ink-100" />
+              <KpiCard
+                label="Needs Attention"
+                value={needsAttentionCount}
+                sub="Defects flagged"
+                color="text-rose-400"
+                borderColor="border-rose-900/30"
+              />
+              <KpiCard
+                label="Checklist Standard"
+                value="100%"
+                sub="Yes/No · Photo verified"
+                color="text-ember-400"
+                borderColor="border-ember-900/30"
+              />
+              <KpiCard
+                label="Passed Items"
+                value={passCount}
+                sub="PASS results"
+                color="text-emerald-400"
+                borderColor="border-emerald-900/30"
+              />
+              <PassRateRing rate={passRate} />
+            </div>
+          ) : (
+            <div className="panel">
+              <FilterRequired scope="inspection metrics" />
+            </div>
+          )}
+
           {/* Table */}
           <div className="table-wrap">
+            {!hasPeriodFilter ? (
+              <FilterRequired scope="inspection logs" />
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -462,6 +532,7 @@ export default function InspectionsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       </div>

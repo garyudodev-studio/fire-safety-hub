@@ -85,6 +85,12 @@ const TAB_SCHEME: Record<TabKey, {
     divider: 'divide-emerald-100',
     hover: 'hover:bg-emerald-50/50',
   },
+  report: {
+    border: 'border-sky-200',
+    headerBg: 'bg-sky-50/60',
+    divider: 'divide-sky-100',
+    hover: 'hover:bg-sky-50/50',
+  },
 };
 
 // PIC cell: profile image icon + name (falls back to initial avatar)
@@ -114,7 +120,7 @@ const PAGE_SIZE = 13;
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type TabKey = 'uninspected' | 'unsafe' | 'safe';
+type TabKey = 'uninspected' | 'unsafe' | 'safe' | 'report';
 
 // Per-tab table color scheme (border line matches the active tab accent)
 
@@ -156,6 +162,22 @@ function PassRateRing({ rate }: { rate: number }) {
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
       <span className="text-xs text-stone-500">Health score</span>
+    </div>
+  );
+}
+
+function FilterRequired({ scope = 'data' }: { scope?: string }) {
+  return (
+    <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-200 text-stone-500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      </span>
+      <p className="text-sm text-stone-500 font-medium">Select a filter to view {scope}</p>
+      <p className="text-xs text-stone-400 max-w-md">
+        Choose a <strong className="text-stone-600">Month</strong> (and optionally <strong className="text-stone-600">Week</strong>) above to see inspection records for that period.
+      </p>
     </div>
   );
 }
@@ -404,11 +426,12 @@ function GuestReportsInner() {
   // Tab & pagination
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     const t = searchParams.get('tab');
-    return t === 'unsafe' || t === 'safe' || t === 'uninspected' ? t : 'uninspected';
+    return t === 'unsafe' || t === 'safe' || t === 'uninspected' || t === 'report' ? t : 'uninspected';
   });
   const [unsafePage,    setUnsafePage]    = useState(1);
   const [safePage,      setSafePage]      = useState(1);
   const [uninspPage,    setUninspPage]    = useState(1);
+  const [reportPage,    setReportPage]    = useState(1);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   // ── Keep URL in sync with filters (external system update) ──
@@ -511,6 +534,8 @@ function GuestReportsInner() {
     return 'All Recorded Dates';
   }, [selectedMonth, selectedWeek]);
 
+  const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
+
   // ── Coverage / "Not inspected" ──
   // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
   // month/week, so inspecting one period never makes other periods' equipment look "uninspected").
@@ -554,11 +579,13 @@ function GuestReportsInner() {
     setUnsafePage(1);
     setSafePage(1);
     setUninspPage(1);
+    setReportPage(1);
   }
   // ── Pagination slices ──
   const unsafeSlice = useMemo(() => unsafeRows.slice((unsafePage - 1) * PAGE_SIZE, unsafePage * PAGE_SIZE), [unsafeRows, unsafePage]);
   const safeSlice   = useMemo(() => safeRows.slice((safePage   - 1) * PAGE_SIZE, safePage   * PAGE_SIZE), [safeRows, safePage]);
   const uninspSlice = useMemo(() => uninspectedRows.slice((uninspPage - 1) * PAGE_SIZE, uninspPage * PAGE_SIZE), [uninspectedRows, uninspPage]);
+  const reportSlice = useMemo(() => filteredInspections.slice((reportPage - 1) * PAGE_SIZE, reportPage * PAGE_SIZE), [filteredInspections, reportPage]);
 
   const setThisMonth = () => {
     const now = new Date();
@@ -764,6 +791,169 @@ function GuestReportsInner() {
     );
   };
 
+  // ★ Professional Inspection Result Report table
+  const renderReport = () => {
+    const entityLabel = selectedEntity === 'All' ? 'All Entities' : selectedEntity;
+    const facilityLabel = selectedFacility === 'All' ? 'All Facilities' : selectedFacility;
+
+    return (
+      <div>
+        {loading ? (
+          <div className="py-20 text-center text-stone-500 flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-stone-300 border-t-red-800" />
+            <p className="text-sm">Loading report…</p>
+          </div>
+        ) : reportSlice.length === 0 ? (
+          <div className="py-16 text-center text-stone-500">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-sky-50 text-sky-600">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+            </div>
+            <p className="text-sm">No inspection results match your filters.</p>
+          </div>
+        ) : (
+          <>
+            {/* ── Report header: logo + entity/facility + period ── */}
+            <div className="border-b border-stone-200 bg-stone-50/60 px-5 py-4">
+              <div className="flex items-center gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logoyj.jpeg"
+                  alt="Company logo"
+                  className="h-14 w-14 rounded-xl border border-stone-200 bg-white object-contain p-1 shrink-0"
+                  draggable={false}
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-bold tracking-tight text-stone-900">Inspection Result Report</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    <span className="font-semibold text-red-800">{entityLabel}</span>
+                    <span className="text-stone-400 mx-1.5">·</span>
+                    <span className="font-semibold text-stone-700">{facilityLabel}</span>
+                  </p>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Period: <span className="text-stone-700">{periodText}</span> ·{' '}
+                    <span className="text-stone-700">{totalInspections}</span> inspection results
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                    passRate >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {passRate}% Pass Rate
+                  </span>
+                  <span className="text-[11px] text-stone-500">{safeCount} PASS · {unsafeCount} NEEDS ATTENTION</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Report table with inspection photos ── */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className={`border-b ${TAB_SCHEME.report.border} ${TAB_SCHEME.report.headerBg}`}>
+                    <th className="th">Photo</th>
+                    <th className="th">Equipment ID</th>
+                    <th className="th">Type</th>
+                    <th className="th">Entity / Facility</th>
+                    <th className="th">Date / Period</th>
+                    <th className="th">Inspector</th>
+                    <th className="th">Status</th>
+                    <th className="th">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${TAB_SCHEME.report.divider}`}>
+                  {reportSlice.map((item) => {
+                    const entity   = item.equipment?.entity   ?? '';
+                    const facility = item.equipment?.facility ?? '';
+                    const photos = (item.photo_url || '').split(',').map((p) => p.trim()).filter(Boolean);
+                    const isPass = item.status === 'PASS';
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setViewingRecord(item)}
+                        className={`transition-colors cursor-pointer ${isPass ? 'hover:bg-emerald-50/50' : 'hover:bg-rose-50/50'}`}
+                      >
+                        <td className="td">
+                          {photos.length > 0 ? (
+                            <ProtectedImage
+                              src={photos[0]}
+                              alt={`${item.equipment_no_id} inspection photo`}
+                              onPreview={() => setViewingRecord(item)}
+                              className="h-12 w-16 rounded-lg border border-stone-200 object-cover"
+                            />
+                          ) : (
+                            <span className="inline-flex h-12 w-16 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-stone-400">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <circle cx="9" cy="9" r="2" />
+                                <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+                              </svg>
+                            </span>
+                          )}
+                        </td>
+                        <td className={`td font-bold ${isPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {item.equipment_no_id}
+                        </td>
+                        <td className="td">
+                          <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
+                            {item.equipment_type}
+                          </span>
+                        </td>
+                        <td className="td text-xs">
+                          {entity && <div className="text-stone-800 font-medium truncate">{entity}</div>}
+                          {facility && <div className="text-stone-500 text-[11px] truncate">{facility}</div>}
+                          {!entity && !facility && <span className="text-stone-400 italic">—</span>}
+                        </td>
+                        <td className="td text-xs text-stone-600">
+                          <div className="truncate">{item.inspection_date}</div>
+                          <div className="text-stone-400 text-[11px] truncate">{item.week} ({item.month_year})</div>
+                        </td>
+                        <td className="td text-xs text-stone-700">{item.inspector_name}</td>
+                        <td className="td">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            isPass
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
+                            {isPass ? (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                              </svg>
+                            )}
+                            {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                          </span>
+                        </td>
+                        <td className="td text-xs text-stone-500 max-w-[200px] truncate">
+                          {item.remarks || <span className="italic text-stone-400">No remarks</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={filteredInspections.length}
+              page={reportPage}
+              pageSize={PAGE_SIZE}
+              onChange={setReportPage}
+            />
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="theme-light min-h-screen bg-stone-100 text-stone-800">
       <div className="p-4 md:p-8">
@@ -871,27 +1061,39 @@ function GuestReportsInner() {
           </div>
 
           {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-stone-900" />
-            <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-600" borderColor="border-rose-200" />
-            <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-600" borderColor="border-emerald-200" />
-            <KpiCard
-              label="Not Inspected"
-              value={notInspectedCount}
-              sub={`of ${totalMasterlistCount} total equipment`}
-              color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
-              borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
-            />
-            <PassRateRing rate={passRate} />
-          </div>
+          {hasPeriodFilter ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-stone-900" />
+              <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-600" borderColor="border-rose-200" />
+              <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-600" borderColor="border-emerald-200" />
+              <KpiCard
+                label="Not Inspected"
+                value={notInspectedCount}
+                sub={`of ${totalMasterlistCount} total equipment`}
+                color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
+                borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
+              />
+              <PassRateRing rate={passRate} />
+            </div>
+          ) : (
+            <div className="panel">
+              <FilterRequired scope="coverage data" />
+            </div>
+          )}
 
           {/* ── Equipment Coverage Breakdown ── */}
           <div className="mt-6">
-            <TypeBreakdown
-              inspections={scopeInspections}
-              masterlist={filteredMasterlist}
-              periodText={periodText}
-            />
+            {hasPeriodFilter ? (
+              <TypeBreakdown
+                inspections={scopeInspections}
+                masterlist={filteredMasterlist}
+                periodText={periodText}
+              />
+            ) : (
+              <div className="panel">
+                <FilterRequired scope="equipment coverage breakdown" />
+              </div>
+            )}
           </div>
 
           {/* ── Tabbed Panel ── */}
@@ -908,7 +1110,7 @@ function GuestReportsInner() {
                 </svg>
                 Uninspected Equipment
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-500'}`}>
-                  {notInspectedCount}
+                  {hasPeriodFilter ? notInspectedCount : '–'}
                 </span>
               </button>
 
@@ -924,7 +1126,7 @@ function GuestReportsInner() {
                 </svg>
                 Unsafe Conditions
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-100 text-rose-700' : 'bg-stone-100 text-stone-500'}`}>
-                  {unsafeCount}
+                  {hasPeriodFilter ? unsafeCount : '–'}
                 </span>
               </button>
 
@@ -939,17 +1141,40 @@ function GuestReportsInner() {
                 </svg>
                 Safe Conditions
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
-                  {safeCount}
+                  {hasPeriodFilter ? safeCount : '–'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('report')}
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'report' ? 'border-sky-500 text-sky-700' : 'border-transparent text-stone-400 hover:text-stone-600'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" />
+                </svg>
+                Result Report
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'report' ? 'bg-sky-100 text-sky-700' : 'bg-stone-100 text-stone-500'}`}>
+                  {hasPeriodFilter ? totalInspections : '–'}
                 </span>
               </button>
             </div>
 
             {/* Active tab body */}
-            {activeTab === 'uninspected'
+            {!hasPeriodFilter ? (
+              <div className="p-0">
+                <FilterRequired scope="inspection records" />
+              </div>
+            ) : activeTab === 'uninspected'
               ? renderUninspectedTable()
               : activeTab === 'safe'
                 ? renderInspectionTable(safeSlice, 'safe')
-                : renderInspectionTable(unsafeSlice, 'unsafe')}
+                : activeTab === 'report'
+                  ? renderReport()
+                  : renderInspectionTable(unsafeSlice, 'unsafe')}
           </div>
 
           {/* ── Footer ── */}
