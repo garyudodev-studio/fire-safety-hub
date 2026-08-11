@@ -179,7 +179,7 @@ function KpiCard({
   );
 }
 
-function PassRateRing({ rate, resolved = 0 }: { rate: number; resolved?: number }) {
+function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = (rate / 100) * circ;
@@ -202,7 +202,7 @@ function PassRateRing({ rate, resolved = 0 }: { rate: number; resolved?: number 
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
       <span className="text-xs text-stone-500">
-        {resolved > 0 ? `${resolved} resolved via CAPA` : 'Pass rate + CAPA'}
+        {addressed > 0 ? `${addressed} resolved or in progress via CAPA` : 'Pass rate + CAPA'}
       </span>
     </div>
   );
@@ -595,7 +595,7 @@ function GuestReportsInner() {
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
   const healthScore = totalInspections > 0
-    ? Math.round(((safeCount + resolvedCount) / totalInspections) * 100)
+    ? Math.round(((safeCount + resolvedCount + inProgressCount) / totalInspections) * 100)
     : 100;
 
   const periodText = useMemo(() => {
@@ -1163,7 +1163,7 @@ function GuestReportsInner() {
                 color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
                 borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
               />
-              <PassRateRing rate={healthScore} resolved={resolvedCount} />
+              <PassRateRing rate={healthScore} addressed={resolvedCount + inProgressCount} />
             </div>
           ) : (
             <div className="panel">
