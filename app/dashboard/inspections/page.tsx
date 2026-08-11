@@ -100,7 +100,9 @@ export default function InspectionsPage() {
   const [selectedWeek,  setSelectedWeek]  = useState(''); // "Week N" from inspection data
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<InspectionRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
+  const [userRole, setUserRole] = useState<string>('inspector');
 
   const supabase = getSupabaseClient();
   const [reloadTrigger, setReloadTrigger] = useState(0);
@@ -121,6 +123,7 @@ export default function InspectionsPage() {
         .single();
 
       if (userProfile) {
+        if (userProfile.role) setUserRole(userProfile.role);
         const assignedEntity = userProfile.entity || userProfile.pic?.entity;
         const assignedFacility = userProfile.facility || userProfile.pic?.facility;
         if (assignedEntity) setSelectedEntity(assignedEntity);
@@ -510,6 +513,15 @@ export default function InspectionsPage() {
                           </td>
                           <td className="td text-right">
                             <div className="flex items-center justify-end gap-2">
+                              {userRole === 'admin' && (
+                                <button
+                                  onClick={() => setEditingRecord(item)}
+                                  className="btn btn-ghost text-xs px-2.5 py-1 text-amber-400 hover:bg-amber-950/30 font-medium"
+                                  title="Edit this inspection log (Admin Only)"
+                                >
+                                  ✏️ Edit
+                                </button>
+                              )}
                               <button
                                 onClick={() => setViewingRecord(item)}
                                 className="btn btn-ghost text-xs px-3 py-1"
@@ -537,14 +549,19 @@ export default function InspectionsPage() {
         </div>
       </div>
 
-      {/* Modal for Creating New Inspection */}
-      {showCreateModal && (
+      {/* Modal for Creating or Editing Inspection */}
+      {(showCreateModal || editingRecord) && (
         <div className="fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 bg-ink-950/80 backdrop-blur-md flex justify-center items-start animate-fade">
           <div className="relative w-full max-w-4xl bg-ink-900 border border-line rounded-3xl shadow-2xl p-6 my-auto sm:my-8">
             <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
-              <h2 className="text-xl font-bold text-ink-100">Perform Live Equipment Inspection</h2>
+              <h2 className="text-xl font-bold text-ink-100 flex items-center gap-2">
+                {editingRecord ? '✏️ Edit Inspection Log (Admin Mode)' : 'Perform Live Equipment Inspection'}
+              </h2>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setEditingRecord(null);
+                }}
                 className="text-ink-400 hover:text-ink-100 text-sm font-medium"
               >
                 ✕ Close
@@ -552,12 +569,17 @@ export default function InspectionsPage() {
             </div>
 
             <InspectionForm
+              editRecord={editingRecord}
               onSuccess={() => {
                 setShowCreateModal(false);
+                setEditingRecord(null);
                 setLoading(true);
                 setReloadTrigger((t) => t + 1);
               }}
-              onCancel={() => setShowCreateModal(false)}
+              onCancel={() => {
+                setShowCreateModal(false);
+                setEditingRecord(null);
+              }}
             />
           </div>
         </div>
@@ -567,6 +589,7 @@ export default function InspectionsPage() {
       <InspectionDetailModal
         inspection={viewingRecord}
         onClose={() => setViewingRecord(null)}
+        onEdit={(item) => setEditingRecord(item)}
       />
 
       <ConfirmModal state={confirmModal} onClose={() => setConfirmModal(null)} />

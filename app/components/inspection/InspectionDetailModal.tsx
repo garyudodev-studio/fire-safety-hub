@@ -32,10 +32,12 @@ export interface InspectionRecord {
 
 import ImageModal from '@/app/components/ui/ImageModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
+import type { ImprovementRecord } from './ImprovementModal';
 
 interface InspectionDetailModalProps {
   inspection: InspectionRecord | null;
   onClose: () => void;
+  onEdit?: (inspection: InspectionRecord) => void;
   theme?: 'light' | 'dark';
 }
 
@@ -129,8 +131,10 @@ const LIGHT: ThemeTokens = {
   footerClose: 'bg-stone-100 text-stone-700 hover:bg-stone-200',
 };
 
-export default function InspectionDetailModal({ inspection, onClose, theme = 'dark' }: InspectionDetailModalProps) {
+export default function InspectionDetailModal({ inspection, onClose, onEdit, theme = 'dark' }: InspectionDetailModalProps) {
   const [inspectorSignature, setInspectorSignature] = useState<string | null>(null);
+  const [improvementRecord, setImprovementRecord] = useState<ImprovementRecord | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   const supabase = getSupabaseClient();
@@ -142,22 +146,46 @@ export default function InspectionDetailModal({ inspection, onClose, theme = 'da
   }
 
   useEffect(() => {
-    if (!inspection?.inspector_name) return;
+    if (!inspection?.id) return;
 
     let cancelled = false;
-    const fetchSignature = async () => {
-      const { data } = await supabase
-        .from('pic')
-        .select('signature_url')
-        .eq('name', inspection.inspector_name)
-        .single();
+    const fetchDetails = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', sessionData.session.user.id)
+          .single();
+        if (!cancelled && profile?.role) {
+          setUserRole(profile.role);
+        }
+      }
 
-      if (!cancelled) {
-        setInspectorSignature(data?.signature_url || null);
+      if (inspection.inspector_name) {
+        const { data: sigData } = await supabase
+          .from('pic')
+          .select('signature_url')
+          .eq('name', inspection.inspector_name)
+          .single();
+
+        if (!cancelled) {
+          setInspectorSignature(sigData?.signature_url || null);
+        }
+      }
+
+      const { data: impData } = await supabase
+        .from('improvements')
+        .select('*')
+        .eq('inspection_id', inspection.id)
+        .maybeSingle();
+
+      if (!cancelled && impData) {
+        setImprovementRecord(impData);
       }
     };
 
-    fetchSignature();
+    fetchDetails();
     return () => {
       cancelled = true;
     };
@@ -187,15 +215,34 @@ export default function InspectionDetailModal({ inspection, onClose, theme = 'da
             </span>
           </div>
 
-          <button
-            onClick={onClose}
-            className={`p-2 rounded-xl transition-colors ${T.closeBtn}`}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {userRole === 'admin' && onEdit && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEdit(inspection);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-ember-600/20 text-ember-400 border border-ember-500/30 hover:bg-ember-600/30 transition-colors flex items-center gap-1.5"
+                title="Edit this inspection log to correct human error (Admin Only)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+                Edit Log
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className={`p-2 rounded-xl transition-colors ${T.closeBtn}`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Modal Content */}
@@ -285,6 +332,81 @@ export default function InspectionDetailModal({ inspection, onClose, theme = 'da
               </div>
             </div>
           </div>
+
+          {/* Unsafe Condition Improvement Card if applicable */}
+          {(inspection.status === 'NEEDS_ATTENTION' || improvementRecord) && (
+            <div className={`p-4 rounded-2xl border ${T.metaCard} space-y-3`}>
+              <div className="flex items-center justify-between">
+                <h4 className={`text-xs font-bold ${T.sectionHeading} uppercase tracking-wider flex items-center gap-2`}>
+                  🛠️ Corrective Action Plan & Improvement Record (CAPA)
+                </h4>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  improvementRecord?.status === 'RESOLVED' ? T.answerNormal : T.answerFail
+                }`}>
+                  {improvementRecord?.status || 'OPEN (Needs Action)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className={`${T.metaLabel} font-semibold block uppercase text-[10px]`}>Action Plan</span>
+                  <p className={`font-medium ${T.metaValue} mt-0.5`}>{improvementRecord?.action_plan || 'No formal plan recorded yet.'}</p>
+                </div>
+                <div>
+                  <span className={`${T.metaLabel} font-semibold block uppercase text-[10px]`}>Actual Action Implemented</span>
+                  <p className={`font-medium ${T.metaValue} mt-0.5`}>{improvementRecord?.action_taken || inspection.action_taken || 'No action taken yet.'}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-2 border-t border-line">
+                <div>
+                  <span className={`${T.metaLabel} text-[10px]`}>PIC Responsible:</span>
+                  <span className={`font-semibold block ${T.metaValue}`}>{improvementRecord?.pic_name || 'Unassigned'}</span>
+                </div>
+                <div>
+                  <span className={`${T.metaLabel} text-[10px]`}>Target Date:</span>
+                  <span className={`font-semibold block ${T.metaValue}`}>{improvementRecord?.target_date || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className={`${T.metaLabel} text-[10px]`}>Completion Date:</span>
+                  <span className="font-semibold block text-emerald-400">{improvementRecord?.completion_date || 'Pending'}</span>
+                </div>
+              </div>
+
+              {/* Before vs After Photo comparison */}
+              {improvementRecord?.after_photo_url && (
+                <div className="pt-2 border-t border-line">
+                  <span className={`${T.metaLabel} font-semibold uppercase tracking-wider block text-[10px] mb-2`}>
+                    Proof of Improvement (Before vs After)
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <span className={`${T.metaLabel} text-[10px]`}>Before Fix</span>
+                      <div className={`rounded-xl overflow-hidden border aspect-video flex items-center justify-center ${T.photoBox}`}>
+                        <ProtectedImage
+                          src={inspection.photo_url.split(',')[0]}
+                          alt="Before Fix"
+                          onPreview={() => setPreviewImage({ url: inspection.photo_url.split(',')[0], title: `Before Fix: ${inspection.equipment_no_id}` })}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-emerald-400 text-[10px]">After Fix (Proof)</span>
+                      <div className={`rounded-xl overflow-hidden border border-emerald-900/60 aspect-video flex items-center justify-center ${T.photoBox}`}>
+                        <ProtectedImage
+                          src={improvementRecord.after_photo_url}
+                          alt="After Fix"
+                          onPreview={() => setPreviewImage({ url: improvementRecord.after_photo_url || '', title: `After Fix: ${inspection.equipment_no_id}` })}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Detailed Question Answers */}
           <div className="space-y-4">

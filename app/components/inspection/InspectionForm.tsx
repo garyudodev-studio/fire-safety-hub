@@ -24,12 +24,15 @@ interface PicItem {
   signature_url?: string;
 }
 
+import { InspectionRecord } from './InspectionDetailModal';
+
 interface InspectionFormProps {
+  editRecord?: InspectionRecord | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export default function InspectionForm({ onSuccess, onCancel }: InspectionFormProps) {
+export default function InspectionForm({ editRecord, onSuccess, onCancel }: InspectionFormProps) {
   const [masterlist, setMasterlist] = useState<EquipmentItem[]>([]);
   const [picList, setPicList] = useState<PicItem[]>([]);
 
@@ -90,13 +93,18 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         `)
         .order('no_id', { ascending: true });
 
-      if (eqData) setMasterlist(eqData as unknown as EquipmentItem[]);
+      const loadedEquipments = eqData ? (eqData as unknown as EquipmentItem[]) : [];
+      setMasterlist(loadedEquipments);
 
       // Fetch PICs
       const { data: picsData } = await supabase
         .from('pic')
         .select('id, name, phone, signature_url')
         .order('name', { ascending: true });
+
+      if (picsData) {
+        setPicList(picsData as PicItem[]);
+      }
 
       // Fetch current user role and pic
       const { data: sessionData } = await supabase.auth.getSession();
@@ -115,18 +123,40 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         }
       }
 
-      if (picsData && picsData.length > 0 && !lockedName) {
-        setPicList(picsData as PicItem[]);
+      if (picsData && picsData.length > 0 && !lockedName && !editRecord) {
         setInspectorName(picsData[0].name); // default first PIC
-      } else if (picsData) {
-        setPicList(picsData as PicItem[]);
+      }
+
+      // Pre-fill form if editing an existing inspection log
+      if (editRecord) {
+        const targetEq = loadedEquipments.find((e) => e.id === editRecord.equipment_id) || {
+          id: editRecord.equipment_id,
+          no_id: editRecord.equipment_no_id,
+          type: editRecord.equipment_type,
+          entity: editRecord.equipment?.entity || '',
+          facility: editRecord.equipment?.facility || '',
+          area: editRecord.equipment?.area || '',
+          location: editRecord.equipment?.location || '',
+        };
+        setSelectedEquipment(targetEq);
+        const cl = getChecklistForType(targetEq.type);
+        setChecklist(cl);
+        setAnswers(editRecord.answers || {});
+        setInspectorName(editRecord.inspector_name || '');
+        setInspectionDate(editRecord.inspection_date || new Date().toISOString().split('T')[0]);
+        setRemarks(editRecord.remarks || '');
+        setActionTaken(editRecord.action_taken || '');
+
+        const photos = (editRecord.photo_url || '').split(',');
+        setEquipmentPhotoUrl(photos[0] ? photos[0].trim() : null);
+        setChecklistPhotoUrl(photos[1] ? photos[1].trim() : photos[0] ? photos[0].trim() : null);
       }
 
       setFetchingData(false);
     };
 
     loadData();
-  }, [supabase]);
+  }, [supabase, editRecord]);
 
   // Detect if the selected equipment was already inspected in the same month + week
   useEffect(() => {
@@ -136,13 +166,18 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
     const checkDuplicate = async () => {
       setCheckingDuplicate(true);
       setDuplicate(null);
-      const { data } = await supabase
+      let query = supabase
         .from('inspections')
         .select('inspector_name, inspection_date')
         .eq('equipment_id', selectedEquipment.id)
         .eq('month_year', monthYear)
-        .eq('week', week)
-        .maybeSingle();
+        .eq('week', week);
+
+      if (editRecord?.id) {
+        query = query.neq('id', editRecord.id);
+      }
+
+      const { data } = await query.maybeSingle();
       if (!cancelled) {
         if (data) setDuplicate({ inspector: data.inspector_name, date: data.inspection_date });
         setCheckingDuplicate(false);
@@ -151,7 +186,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
 
     checkDuplicate();
     return () => { cancelled = true; };
-  }, [selectedEquipment, week, monthYear, supabase]);
+  }, [selectedEquipment, week, monthYear, supabase, editRecord]);
 
   // Unique list of facilities/factories for filter dropdown
   const uniqueFacilities = Array.from(
@@ -277,13 +312,18 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
 
     try {
       // 0. Prevent duplicate: same equipment + same month/year + same week is already inspected
-      const { data: existing } = await supabase
+      let dupQuery = supabase
         .from('inspections')
-        .select('inspector_name, inspection_date')
+        .select('id, inspector_name, inspection_date')
         .eq('equipment_id', selectedEquipment.id)
         .eq('month_year', monthYear)
-        .eq('week', week)
-        .maybeSingle();
+        .eq('week', week);
+
+      if (editRecord?.id) {
+        dupQuery = dupQuery.neq('id', editRecord.id);
+      }
+
+      const { data: existing } = await dupQuery.maybeSingle();
 
       if (existing) {
         setErrorMsg(
@@ -324,7 +364,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         uploadedChecklistPhotoUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Insert record into `public.inspections` table
+      // 2. Save record into `public.inspections` table (Insert or Update)
       const payload = {
         equipment_id: selectedEquipment.id,
         equipment_no_id: selectedEquipment.no_id,
@@ -340,10 +380,17 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
         action_taken: actionTaken.trim() || null,
       };
 
-      const { error: dbError } = await supabase.from('inspections').insert(payload);
+      if (editRecord?.id) {
+        const { error: dbError } = await supabase
+          .from('inspections')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', editRecord.id);
 
-      if (dbError) {
-        throw new Error(`Failed to save inspection: ${dbError.message}`);
+        if (dbError) throw new Error(`Failed to update inspection log: ${dbError.message}`);
+      } else {
+        const { error: dbError } = await supabase.from('inspections').insert(payload);
+
+        if (dbError) throw new Error(`Failed to save inspection: ${dbError.message}`);
       }
 
       setLoading(false);

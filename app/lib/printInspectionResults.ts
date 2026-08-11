@@ -30,6 +30,15 @@ export interface PrintInspectionRecord {
   remarks?: string | null;
   action_taken?: string | null;
   equipment?: PrintInspectionEquipment | null;
+  improvement?: {
+    status?: string;
+    action_plan?: string | null;
+    action_taken?: string | null;
+    pic_name?: string | null;
+    target_date?: string | null;
+    completion_date?: string | null;
+    after_photo_url?: string | null;
+  } | null;
 }
 
 // ─── Template resolution ────────────────────────────────────────────────────

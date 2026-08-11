@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
+import ImprovementModal, { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
+import InspectionForm from '@/app/components/inspection/InspectionForm';
 import { printInspectionResults } from '@/app/lib/printInspectionResults';
 import { printResultReport } from '@/app/lib/printResultReport';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
@@ -391,6 +393,12 @@ export default function ReportsPage() {
 
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
   const [masterlist,  setMasterlist]  = useState<EquipmentMaster[]>([]);
+  const [improvementsMap, setImprovementsMap] = useState<Map<string, ImprovementRecord>>(new Map());
+  const [activeImprovementInspection, setActiveImprovementInspection] = useState<InspectionRecord | null>(null);
+  const [activeExistingImprovement, setActiveExistingImprovement] = useState<ImprovementRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<InspectionRecord | null>(null);
+  const [userRole, setUserRole] = useState<string>('inspector');
+
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
@@ -438,7 +446,7 @@ export default function ReportsPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) { router.push('/'); return; }
 
-      const [inspRes, masterRes, profileRes] = await Promise.all([
+      const [inspRes, masterRes, profileRes, impRes] = await Promise.all([
         supabase
           .from('inspections')
           .select(`*, equipment:equipment_id(location, facility, area, entity)`)
@@ -454,14 +462,24 @@ export default function ReportsPage() {
           .from('profiles')
           .select('role, entity, facility, pic:pic_id(entity, facility)')
           .eq('id', sessionData.session.user.id)
-          .single()
+          .single(),
+        supabase
+          .from('improvements')
+          .select('*')
       ]);
 
       if (!inspRes.error   && inspRes.data)   setInspections(inspRes.data as InspectionRecord[]);
       if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
 
+      if (impRes.data) {
+        const map = new Map<string, ImprovementRecord>();
+        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
+        setImprovementsMap(map);
+      }
+
       if (profileRes.data) {
         const userProfile = profileRes.data;
+        if (userProfile.role) setUserRole(userProfile.role);
         const assignedEntity = userProfile.entity || userProfile.pic?.entity;
         const assignedFacility = userProfile.facility || userProfile.pic?.facility;
         if (assignedEntity) setSelectedEntity(assignedEntity);
@@ -704,6 +722,7 @@ export default function ReportsPage() {
                     <th className="th">Date / Period</th>
                     <th className="th">Inspector</th>
                     <th className="th">Remarks</th>
+                    {isUnsafe && <th className="th">Improvement Status</th>}
                     <th className="th text-right">Detail</th>
                   </tr>
                 </thead>
@@ -711,9 +730,11 @@ export default function ReportsPage() {
                   {rows.map((item) => {
                     const entity   = item.equipment?.entity   ?? '';
                     const facility = item.equipment?.facility ?? '';
-  return (
-    <tr
-      key={item.id}
+                    const imp = improvementsMap.get(item.id);
+                    const impStatus = imp?.status || 'OPEN';
+                    return (
+                      <tr
+                        key={item.id}
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
@@ -738,8 +759,45 @@ export default function ReportsPage() {
                         <td className="td text-xs text-ink-400 max-w-[180px] truncate">
                           {item.remarks || <span className="italic text-ink-600">No remarks</span>}
                         </td>
+                        {isUnsafe && (
+                          <td className="td text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                impStatus === 'RESOLVED'
+                                  ? 'tone-emerald'
+                                  : impStatus === 'IN_PROGRESS'
+                                  ? 'tone-amber'
+                                  : 'tone-rose'
+                              }`}>
+                                {impStatus}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveImprovementInspection(item);
+                                  setActiveExistingImprovement(imp || null);
+                                }}
+                                className="px-2 py-1 rounded bg-ink-800 hover:bg-ink-700 text-[11px] text-ink-200 border border-line font-medium shrink-0"
+                              >
+                                {imp ? 'Edit CAPA' : '+ Log Fix'}
+                              </button>
+                            </div>
+                          </td>
+                        )}
                         <td className="td text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {userRole === 'admin' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingRecord(item);
+                                }}
+                                className="btn btn-ghost text-xs px-2.5 py-1 text-amber-400 hover:bg-amber-950/30 font-medium"
+                                title="Edit this inspection log to correct human error (Admin Only)"
+                              >
+                                ✏️ Edit
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); handlePrintSingle(item); }}
                               disabled={printing}
@@ -1283,7 +1341,47 @@ export default function ReportsPage() {
       <InspectionDetailModal
         inspection={viewingRecord}
         onClose={() => setViewingRecord(null)}
+        onEdit={(item) => setEditingRecord(item)}
       />
+
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 bg-ink-950/80 backdrop-blur-md flex justify-center items-start animate-fade">
+          <div className="relative w-full max-w-4xl bg-ink-900 border border-line rounded-3xl shadow-2xl p-6 my-auto sm:my-8">
+            <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
+              <h2 className="text-xl font-bold text-ink-100 flex items-center gap-2">
+                ✏️ Edit Inspection Log (Admin Mode)
+              </h2>
+              <button
+                onClick={() => setEditingRecord(null)}
+                className="text-ink-400 hover:text-ink-100 text-sm font-medium"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <InspectionForm
+              editRecord={editingRecord}
+              onSuccess={() => {
+                setEditingRecord(null);
+                setReloadTrigger((t) => t + 1);
+              }}
+              onCancel={() => setEditingRecord(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeImprovementInspection && (
+        <ImprovementModal
+          inspection={activeImprovementInspection}
+          existingImprovement={activeExistingImprovement}
+          onClose={() => {
+            setActiveImprovementInspection(null);
+            setActiveExistingImprovement(null);
+          }}
+          onSuccess={() => setReloadTrigger((prev) => prev + 1)}
+        />
+      )}
 
       <AlertModal state={alertModal} onClose={() => setAlertModal(null)} />
     </>

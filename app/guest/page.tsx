@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
+import type { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,45 @@ function formatMonthYear(monthYear: string): string {
   const year = parseInt(yyyy, 10);
   if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
   return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
+}
+
+function CapaStatusBadge({ improvement }: { improvement?: ImprovementRecord | null }) {
+  if (!improvement) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-stone-50 text-stone-500 border border-stone-200 whitespace-nowrap">
+        None
+      </span>
+    );
+  }
+  const resolved   = improvement.status === 'RESOLVED';
+  const inProgress = improvement.status === 'IN_PROGRESS';
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${
+        resolved
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : inProgress
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-rose-50 text-rose-700 border-rose-200'
+      }`}
+    >
+      {resolved ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : inProgress ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      ) : (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      )}
+      {resolved ? 'RESOLVED' : inProgress ? 'IN PROGRESS' : 'OPEN'}
+    </span>
+  );
 }
 
 // Per-tab table color scheme (border line matches the active tab accent)
@@ -408,6 +448,7 @@ function GuestReportsInner() {
 
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
   const [masterlist,  setMasterlist]  = useState<EquipmentMaster[]>([]);
+  const [improvementsMap, setImprovementsMap] = useState<Map<string, ImprovementRecord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
@@ -469,18 +510,27 @@ function GuestReportsInner() {
     const fetchData = async () => {
       setLoading(true);
 
-      const [inspRes, masterRes] = await Promise.all([
+      const [inspRes, masterRes, impRes] = await Promise.all([
         supabase
           .from('inspections')
           .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile))`)
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)')
+          .select('id, no_id, type, entity, facility, area, location, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)'),
+        supabase
+          .from('improvements')
+          .select('*')
       ]);
 
       if (!inspRes.error   && inspRes.data)    setInspections(inspRes.data as InspectionRecord[]);
       if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
+
+      const map = new Map<string, ImprovementRecord>();
+      if (impRes.data) {
+        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
+      }
+      setImprovementsMap(map);
 
       setLastFetched(new Date());
       setLoading(false);
@@ -631,6 +681,7 @@ function GuestReportsInner() {
                     <th className="th w-[11%]">Date / Period</th>
                     <th className="th w-[10%]">PIC 1</th>
                     <th className="th w-[10%]">PIC 2</th>
+                    {isUnsafe && <th className="th w-[9%]">CAPA Status</th>}
                     <th className="th w-[6%] text-right">Detail</th>
                   </tr>
                 </thead>
@@ -675,6 +726,11 @@ function GuestReportsInner() {
                         <td data-label="PIC 2" className="td">
                           <PicCell pic={item.equipment?.pic_2} accent={accent} />
                         </td>
+                        {isUnsafe && (
+                          <td data-label="CAPA Status" className="td">
+                            <CapaStatusBadge improvement={improvementsMap.get(item.id)} />
+                          </td>
+                        )}
                         <td data-label="Action" className="td text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
