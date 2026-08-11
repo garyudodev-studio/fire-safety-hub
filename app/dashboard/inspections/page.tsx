@@ -11,10 +11,10 @@ import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/compon
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
-    case 'Fire Alarm': return 'bg-ember-950/60 text-ember-300 border-ember-900/60';
-    case 'Fire Hydrant': return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
-    case 'Fire Extinguisher': return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
-    case 'Emergency Lamp': return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
+    case 'Fire Alarm': return 'tone-ember';
+    case 'Fire Hydrant': return 'tone-sky';
+    case 'Fire Extinguisher': return 'tone-orange';
+    case 'Emergency Lamp': return 'tone-amber';
     default: return 'bg-white/[0.04] text-ink-300 border-line';
   }
 }
@@ -30,7 +30,7 @@ function formatMonthYear(monthYear: string): string {
 function FilterRequired({ scope = 'data' }: { scope?: string }) {
   return (
     <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full tone-sky">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
         </svg>
@@ -264,9 +264,9 @@ export default function InspectionsPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">
                   Personnel Portal
                 </span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-ember-950/60 text-ember-300 border border-ember-900/60">
-                  Full Access
-                </span>
+<span className="text-xs font-semibold px-2 py-0.5 rounded-full border tone-ember">
+                          Full Access
+                        </span>
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-ink-100 mt-1">
                 Equipment Inspection Logs
@@ -396,7 +396,7 @@ export default function InspectionsPage() {
                   This Month
                 </button>
                 {(selectedMonth || selectedWeek) && (
-                  <button onClick={clearPeriod} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                  <button onClick={clearPeriod} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-600">
                     Clear
                   </button>
                 )}
@@ -501,8 +501,8 @@ export default function InspectionsPage() {
                             <span
                               className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${
                                 item.status === 'PASS'
-                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-900/60'
-                                  : 'bg-rose-950/60 text-rose-300 border-rose-900/60'
+                                  ? 'tone-emerald'
+                                  : 'tone-rose'
                               }`}
                             >
                               {item.status === 'PASS' ? '✓ PASS' : '⚠️ NEEDS ATTENTION'}

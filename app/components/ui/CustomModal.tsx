@@ -36,8 +36,8 @@ export function ConfirmModal({ state, onClose }: { state: ConfirmState | null; o
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-ink-950/80 backdrop-blur-md animate-fade">
       <div className="relative w-full max-w-sm bg-ink-900 border border-line rounded-2xl p-6 shadow-2xl space-y-4">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-            isDanger ? 'bg-rose-950/80 text-rose-400 border border-rose-900/60' : 'bg-ember-950/80 text-ember-400 border border-ember-900/60'
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+            isDanger ? 'tone-rose' : 'tone-ember'
           }`}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               {isDanger ? (
@@ -113,12 +113,12 @@ export function AlertModal({ state, onClose }: { state: AlertState | null; onClo
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-ink-950/80 backdrop-blur-md animate-fade">
       <div className="relative w-full max-w-sm bg-ink-900 border border-line rounded-2xl p-6 shadow-2xl space-y-4">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
             isError
-              ? 'bg-rose-950/80 text-rose-400 border border-rose-900/60'
+              ? 'tone-rose'
               : isSuccess
-              ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-900/60'
-              : 'bg-sky-950/80 text-sky-400 border border-sky-900/60'
+              ? 'tone-emerald'
+              : 'tone-sky'
           }`}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               {isError ? (

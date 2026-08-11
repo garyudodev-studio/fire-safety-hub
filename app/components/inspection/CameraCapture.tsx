@@ -146,7 +146,7 @@ export default function CameraCapture({
           <div>
             <label className="field-label text-ink-200 text-sm font-semibold flex items-center gap-2">
               {title}
-              <span className="text-xs font-normal text-rose-400 bg-rose-950/60 border border-rose-900/60 px-2.5 py-0.5 rounded-full">
+              <span className="text-xs font-normal border px-2.5 py-0.5 rounded-full tone-rose">
                 Live Capture Required
               </span>
             </label>
@@ -156,7 +156,7 @@ export default function CameraCapture({
             <button
               type="button"
               onClick={onPhotoCleared}
-              className="shrink-0 text-xs text-rose-400 hover:text-rose-300 underline underline-offset-4 transition-colors mt-0.5"
+              className="shrink-0 text-xs text-rose-400 hover:text-rose-600 underline underline-offset-4 transition-colors mt-0.5"
             >
               Retake
             </button>
@@ -204,7 +204,7 @@ export default function CameraCapture({
                 </div>
 
                 {readError && (
-                  <p className="text-xs text-rose-400 bg-rose-950/40 border border-rose-900/50 px-3 py-2 rounded-lg text-left leading-relaxed">
+                  <p className="text-xs border px-3 py-2 rounded-lg text-left leading-relaxed tone-rose">
                     {readError}
                   </p>
                 )}

@@ -35,10 +35,10 @@ interface EquipmentMaster {
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
-    case 'Fire Alarm':          return 'bg-ember-950/60 text-ember-300 border-ember-900/60';
-    case 'Fire Hydrant':        return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
-    case 'Fire Extinguisher':   return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
-    case 'Emergency Lamp':      return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
+    case 'Fire Alarm':          return 'tone-ember';
+    case 'Fire Hydrant':        return 'tone-sky';
+    case 'Fire Extinguisher':   return 'tone-orange';
+    case 'Emergency Lamp':      return 'tone-amber';
     default:                    return 'bg-white/[0.04] text-ink-300 border-line';
   }
 }
@@ -114,7 +114,7 @@ function PassRateRing({ rate }: { rate: number }) {
 function FilterRequired({ scope = 'data' }: { scope?: string }) {
   return (
     <div className="py-10 flex flex-col items-center justify-center text-center gap-2">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full tone-sky">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
         </svg>
@@ -190,7 +190,7 @@ function TypeBreakdown({
           <div className="min-w-0">
             <h3 className="text-xs font-bold uppercase tracking-wider text-ink-200 flex items-center gap-2">
               Equipment Coverage Breakdown
-              <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60 font-mono">
+              <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full border font-mono tone-ember">
                 📅 Period: {periodText}
               </span>
             </h3>
@@ -208,10 +208,8 @@ function TypeBreakdown({
         </div>
 
         {hasPeriodFilter && (
-          <span className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-            overallPending === 0
-              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-900/60'
-              : 'bg-amber-950/80 text-amber-300 border border-amber-900/60'
+          <span className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+            overallPending === 0 ? 'tone-emerald' : 'tone-amber'
           }`}>
             {overallPending === 0 ? (
               <>
@@ -237,7 +235,7 @@ function TypeBreakdown({
         <div className="px-5 pb-5 border-t border-line">
           {!hasPeriodFilter ? (
             <div className="py-8 flex flex-col items-center justify-center text-center gap-2">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-950/50 text-sky-400">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full tone-sky">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="4" width="18" height="18" rx="2" />
                   <line x1="16" y1="2" x2="16" y2="6" />
@@ -274,11 +272,11 @@ function TypeBreakdown({
                           <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
                         )}
                         {r.notInspected > 0 ? (
-                          <span className="text-amber-400 font-bold bg-amber-950/50 border border-amber-900/50 px-2 py-0.5 rounded text-[11px]">
+                          <span className="tone-amber font-bold border px-2 py-0.5 rounded text-[11px]">
                             {r.notInspected} Not Yet Inspected
                           </span>
                         ) : (
-                          <span className="text-emerald-400 font-bold bg-emerald-950/50 border border-emerald-900/50 px-2 py-0.5 rounded text-[11px]">
+                          <span className="tone-emerald font-bold border px-2 py-0.5 rounded text-[11px]">
                             ✓ Complete
                           </span>
                         )}
@@ -316,14 +314,14 @@ function TypeBreakdown({
 
               {/* Alert banner if pending items remain */}
               {overallPending > 0 && (
-                <div className="mt-3 rounded-xl bg-amber-950/40 border border-amber-900/50 p-3.5 text-xs text-amber-300 flex items-start gap-2.5">
+                <div className="mt-3 rounded-xl border tone-amber p-3.5 text-xs flex items-start gap-2.5">
                   <svg className="mt-0.5 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                   </svg>
                   <div>
                     <p className="font-bold">Inspection Period Incomplete ({periodText})</p>
-                    <p className="mt-0.5 text-amber-300/80">
+                    <p className="mt-0.5 opacity-80">
                       <strong>{overallPending} out of {totalMasterlistAll}</strong> masterlist equipment have not been inspected during this period.
                       Ensure all equipment items receive inspection.
                     </p>
@@ -687,7 +685,7 @@ export default function ReportsPage() {
           </div>
         ) : rows.length === 0 ? (
           <div className="py-16 text-center text-ink-500">
-            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 ${isUnsafe ? 'bg-emerald-950/50 text-emerald-400' : 'bg-sky-950/50 text-sky-400'}`}>
+            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 ${isUnsafe ? 'tone-emerald' : 'tone-sky'}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {isUnsafe ? <polyline points="20 6 9 17 4 12" /> : <circle cx="12" cy="12" r="9" />}
               </svg>
@@ -717,9 +715,9 @@ export default function ReportsPage() {
     <tr
       key={item.id}
                         onClick={() => setViewingRecord(item)}
-                        className={`transition-colors cursor-pointer ${isUnsafe ? 'hover:bg-rose-950/10' : 'hover:bg-emerald-950/10'}`}
+                        className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
-                        <td className={`td font-bold ${isUnsafe ? 'text-rose-300' : 'text-emerald-300'}`}>
+                        <td className={`td font-bold ${isUnsafe ? 'text-rose-400' : 'text-emerald-400'}`}>
                           {item.equipment_no_id}
                         </td>
                         <td className="td">
@@ -745,7 +743,7 @@ export default function ReportsPage() {
                             <button
                               onClick={(e) => { e.stopPropagation(); handlePrintSingle(item); }}
                               disabled={printing}
-                              className={`btn btn-ghost text-xs px-2.5 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                              className={`btn btn-ghost text-xs px-2.5 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-ink-700/20' : 'text-emerald-400 hover:bg-ink-700/20'}`}
                               title="Print A4 checklist for this inspection"
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -756,7 +754,7 @@ export default function ReportsPage() {
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); setViewingRecord(item); }}
-                              className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-rose-950/50' : 'text-emerald-400 hover:bg-emerald-950/50'}`}
+                              className={`btn btn-ghost text-xs px-3 py-1 ${isUnsafe ? 'text-rose-400 hover:bg-ink-700/20' : 'text-emerald-400 hover:bg-ink-700/20'}`}
                             >
                               Details
                             </button>
@@ -791,7 +789,7 @@ export default function ReportsPage() {
           </div>
         ) : uninspSlice.length === 0 ? (
           <div className="py-16 text-center text-ink-500">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-emerald-950/50 text-emerald-400">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 tone-emerald">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -817,8 +815,8 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {uninspSlice.map((equip) => (
-                    <tr key={equip.id} className="transition-colors hover:bg-amber-950/10">
-                      <td className="td font-bold text-amber-300">{equip.no_id}</td>
+                    <tr key={equip.id} className="transition-colors hover:bg-ink-700/10">
+                      <td className="td font-bold text-amber-400">{equip.no_id}</td>
                       <td className="td">
                         <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
                           {equip.type}
@@ -833,7 +831,7 @@ export default function ReportsPage() {
                         {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
                       </td>
                       <td className="td text-right">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/50">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border tone-amber">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
@@ -871,7 +869,7 @@ export default function ReportsPage() {
           </div>
         ) : reportSlice.length === 0 ? (
           <div className="py-16 text-center text-ink-500">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 bg-sky-950/50 text-sky-400">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full mb-4 tone-sky">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -894,7 +892,7 @@ export default function ReportsPage() {
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg font-bold tracking-tight text-ink-100">Inspection Result Report</h3>
                   <p className="text-xs text-ink-400 mt-0.5">
-                    <span className="font-semibold text-ember-300">{entityLabel}</span>
+                    <span className="font-semibold text-ember-500">{entityLabel}</span>
                     <span className="text-ink-500 mx-1.5">·</span>
                     <span className="font-semibold text-ink-200">{facilityLabel}</span>
                   </p>
@@ -905,7 +903,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="flex items-end gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${passRate >= 80 ? 'bg-emerald-950/70 text-emerald-300 border-emerald-900/60' : 'bg-amber-950/70 text-amber-300 border-amber-900/60'}`}>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${passRate >= 80 ? 'tone-emerald' : 'tone-amber'}`}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
@@ -955,7 +953,7 @@ export default function ReportsPage() {
                       <tr
                         key={item.id}
                         onClick={() => setViewingRecord(item)}
-                        className={`transition-colors cursor-pointer ${isPass ? 'hover:bg-emerald-950/10' : 'hover:bg-rose-950/10'}`}
+                        className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
                         <td className="td">
                           {photos.length > 0 ? (
@@ -975,7 +973,7 @@ export default function ReportsPage() {
                             </span>
                           )}
                         </td>
-                        <td className={`td font-bold ${isPass ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        <td className={`td font-bold ${isPass ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {item.equipment_no_id}
                         </td>
                         <td className="td">
@@ -995,9 +993,7 @@ export default function ReportsPage() {
                         <td className="td text-xs text-ink-200">{item.inspector_name}</td>
                         <td className="td">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                            isPass
-                              ? 'bg-emerald-950/70 text-emerald-300 border-emerald-900/60'
-                              : 'bg-rose-950/70 text-rose-300 border-rose-900/60'
+                            isPass ? 'tone-emerald' : 'tone-rose'
                           }`}>
                             {isPass ? (
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1147,7 +1143,7 @@ export default function ReportsPage() {
                   This Month
                 </button>
                 {(selectedMonth || selectedWeek) && (
-                  <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-300">
+                  <button onClick={clearDates} className="btn btn-ghost text-xs px-3 py-2 text-rose-400 hover:text-rose-600">
                     Clear
                   </button>
                 )}
@@ -1198,7 +1194,7 @@ export default function ReportsPage() {
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 Uninspected Equipment
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'bg-amber-950/80 text-amber-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'uninspected' ? 'tone-amber' : 'bg-ink-800 text-ink-500'}`}>
                   {hasPeriodFilter ? notInspectedCount : '–'}
                 </span>
               </button>
@@ -1214,7 +1210,7 @@ export default function ReportsPage() {
                   <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
                 Unsafe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'bg-rose-950/80 text-rose-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'unsafe' ? 'tone-rose' : 'bg-ink-800 text-ink-500'}`}>
                   {hasPeriodFilter ? unsafeCount : '–'}
                 </span>
               </button>
@@ -1230,7 +1226,7 @@ export default function ReportsPage() {
                   <polyline points="9 12 11 14 15 10" />
                 </svg>
                 Safe Conditions
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'bg-emerald-950/80 text-emerald-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'safe' ? 'tone-emerald' : 'bg-ink-800 text-ink-500'}`}>
                   {hasPeriodFilter ? safeCount : '–'}
                 </span>
               </button>
@@ -1247,20 +1243,20 @@ export default function ReportsPage() {
                   <path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" />
                 </svg>
                 Result Report
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'report' ? 'bg-sky-950/80 text-sky-300' : 'bg-ink-800 text-ink-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'report' ? 'tone-sky' : 'bg-ink-800 text-ink-500'}`}>
                   {hasPeriodFilter ? totalInspections : '–'}
                 </span>
               </button>
             </div>
 
-            <div className={`px-5 py-3 text-xs font-semibold uppercase tracking-wider border-b border-line ${
+            <div className={`px-5 py-3 text-xs font-semibold uppercase tracking-wider border-b border-line bg-ink-700/10 ${
               activeTab === 'uninspected'
-                ? 'text-amber-400 bg-amber-950/10'
+                ? 'text-amber-400'
                 : activeTab === 'unsafe'
-                  ? 'text-rose-400 bg-rose-950/10'
+                  ? 'text-rose-400'
                   : activeTab === 'safe'
-                    ? 'text-emerald-400 bg-emerald-950/10'
-                    : 'text-sky-400 bg-sky-950/10'
+                    ? 'text-emerald-400'
+                    : 'text-sky-400'
             }`}>
               {activeTab === 'uninspected'
                 ? '⚠️ Masterlist equipment not yet inspected'

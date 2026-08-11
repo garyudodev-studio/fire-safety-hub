@@ -94,10 +94,10 @@ function getFormTemplate(type: string): string {
 
 function getTypeBadgeColor(type: string): string {
     switch (type) {
-        case 'Fire Alarm': return 'bg-ember-950/60 text-ember-300 border-ember-900/60';
-        case 'Fire Hydrant': return 'bg-sky-950/60 text-sky-300 border-sky-900/60';
-        case 'Fire Extinguisher': return 'bg-orange-950/60 text-orange-300 border-orange-900/60';
-        case 'Emergency Lamp': return 'bg-amber-950/60 text-amber-300 border-amber-900/60';
+        case 'Fire Alarm': return 'tone-ember';
+        case 'Fire Hydrant': return 'tone-sky';
+        case 'Fire Extinguisher': return 'tone-orange';
+        case 'Emergency Lamp': return 'tone-amber';
         default: return 'bg-white/[0.04] text-ink-300 border-line';
     }
 }
@@ -212,10 +212,10 @@ export default function AdminDashboard() {
         if (item.type !== 'Fire Extinguisher' || !item.expire_date) return null;
         const exp = new Date(item.expire_date); exp.setHours(0,0,0,0);
         const days = Math.round((exp.getTime() - today.getTime()) / 86400000);
-        if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
-        if (days === 0) return { label: 'Expires today!', cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
-        if (days <= 7)  return { label: `Expires in ${days}d`, cls: 'bg-rose-950/80 text-rose-300 border-rose-800/60' };
-        if (days <= 30) return { label: `Expires in ${days}d`, cls: 'bg-amber-950/80 text-amber-300 border-amber-800/60' };
+        if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, cls: 'tone-rose' };
+        if (days === 0) return { label: 'Expires today!', cls: 'tone-rose' };
+        if (days <= 7)  return { label: `Expires in ${days}d`, cls: 'tone-rose' };
+        if (days <= 30) return { label: `Expires in ${days}d`, cls: 'tone-amber' };
         return null;
     };
 
@@ -758,15 +758,15 @@ export default function AdminDashboard() {
 
                 {/* 🔴 Expiry Alert Banner */}
                 {expiringExtinguishers.length > 0 && (
-                    <div className="mb-5 rounded-2xl border border-amber-900/50 bg-amber-950/30 p-4 flex items-start gap-3 animate-rise">
-                        <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400">
+                    <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3 animate-rise">
+                        <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-amber-300">
+                            <p className="text-sm font-semibold text-amber-400">
                                 {expiringExtinguishers.filter(e => e.expired).length > 0
                                     ? `⚠️ ${expiringExtinguishers.filter(e=>e.expired).length} Fire Extinguisher(s) EXPIRED — immediate replacement required`
                                     : `⏰ ${expiringExtinguishers.length} Fire Extinguisher(s) expiring within 30 days`
@@ -775,7 +775,7 @@ export default function AdminDashboard() {
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {expiringExtinguishers.slice(0, 8).map(item => (
                                     <span key={item.id} className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium ${
-                                        item.expired ? 'bg-rose-950/80 text-rose-300 border-rose-800/60' : 'bg-amber-950/80 text-amber-300 border-amber-800/60'
+                                        item.expired ? 'tone-rose' : 'tone-amber'
                                     }`}>
                                         <span className="font-bold font-mono">{item.no_id}</span>
                                         <span className="text-[10px] opacity-75">{item.expired ? `expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft}d left`}</span>
@@ -826,10 +826,11 @@ export default function AdminDashboard() {
                     </div>
                 </header>
 
-                {/* Filter Bar + View Toggle */}
-                <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center">
-                    <div className="flex flex-1 flex-col md:flex-row flex-wrap items-start md:items-center gap-3">
-                        <div className="relative w-full md:w-auto">
+                {/* Filter Bar */}
+                <div className="mb-6 flex flex-col gap-3">
+                    {/* Filters — one row */}
+                    <div className="flex flex-col gap-3 md:flex-row md:flex-nowrap md:items-center">
+                        <div className="relative w-full md:flex-[1.2] md:min-w-0">
                             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500">
                                 <SearchIcon />
                             </span>
@@ -838,7 +839,7 @@ export default function AdminDashboard() {
                                 placeholder="Search by ID or PIC..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="input pl-10 min-w-full md:min-w-[200px]"
+                                className="input pl-10 w-full"
                             />
                         </div>
                         {[
@@ -847,11 +848,11 @@ export default function AdminDashboard() {
                             { value: filterType, set: setFilterType, label: 'All Types', options: uniqueTypes },
                             { value: filterArea, set: setFilterArea, label: 'All Areas', options: uniqueAreas },
                         ].map((f, i) => (
-                            <div key={i} className="relative w-full md:w-auto">
+                            <div key={i} className="relative w-full md:min-w-0 md:flex-1">
                                 <select
                                     value={f.value}
                                     onChange={e => f.set(e.target.value)}
-                                    className="select min-w-[150px]"
+                                    className="select w-full"
                                 >
                                     <option value="">{f.label}</option>
                                     {f.options.map(o => <option key={o as string} value={o as string}>{o as string}</option>)}
@@ -865,7 +866,7 @@ export default function AdminDashboard() {
                         {activeFiltersCount > 0 && (
                             <button
                                 onClick={() => { setFilterEntity(''); setFilterFacility(''); setFilterType(''); setFilterArea(''); setSearchQuery(''); }}
-                                className="btn btn-ghost px-3 py-2.5 text-xs w-full md:w-auto justify-center"
+                                className="btn btn-ghost px-3 py-2.5 text-xs w-full justify-center md:w-auto md:flex-none"
                             >
                                 Clear
                                 <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-ink-300">{activeFiltersCount}</span>
@@ -875,31 +876,35 @@ export default function AdminDashboard() {
                         {filteredEquipment.length > 0 && filterType && (
                             <button
                                 onClick={handlePrintFiltered}
-                                className="btn btn-soft px-3 py-2.5 text-xs"
+                                className="btn btn-soft px-3 py-2.5 text-xs md:flex-none"
                             >
                                 <PrintIcon /> Print Filtered
                             </button>
                         )}
-
-                        <span className="ml-auto text-sm text-ink-500 w-full md:w-auto text-right">
-                            {filteredEquipment.length} <span className="text-ink-600">/</span> {equipment.length} items
-                        </span>
                     </div>
 
-                    {/* View Mode Toggle */}
-                    <div className="flex gap-1 rounded-xl border border-line bg-ink-900 p-1 w-full md:w-auto">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`flex items-center justify-center flex-1 md:flex-none gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
-                        >
-                            <GridIcon /> Grid
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`flex items-center justify-center flex-1 md:flex-none gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
-                        >
-                            <ListIcon /> List
-                        </button>
+                    {/* Result count + View Mode Toggle — new line */}
+                    <div className="flex items-center justify-between gap-3 md:justify-end md:gap-4">
+                        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-line bg-ink-900 px-3 py-2 text-sm font-medium text-ink-400">
+                            <span className="font-semibold tabular-nums text-ink-100">{filteredEquipment.length}</span>
+                            <span className="text-ink-600">/</span>
+                            <span className="tabular-nums text-ink-500">{equipment.length}</span>
+                            <span className="text-ink-500">items</span>
+                        </span>
+                        <div className="flex flex-1 gap-1 rounded-xl border border-line bg-ink-900 p-1 md:flex-none">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all md:flex-none ${viewMode === 'grid' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                            >
+                                <GridIcon /> Grid
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all md:flex-none ${viewMode === 'list' ? 'bg-ink-750 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                            >
+                                <ListIcon /> List
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1099,7 +1104,7 @@ export default function AdminDashboard() {
                                             const expiryBadge = getExpiryStatus(item);
 
                                             return (
-                                                <tr key={item.id} className={`transition-colors group hover:bg-white/[0.03] ${selectedIds.has(item.id) ? 'bg-white/[0.03]' : ''} ${expiryBadge ? 'bg-amber-950/10' : ''}`}>
+                                                <tr key={item.id} className={`transition-colors group hover:bg-white/[0.03] ${selectedIds.has(item.id) ? 'bg-white/[0.03]' : ''} ${expiryBadge ? 'bg-amber-500/10' : ''}`}>
                                                     <td className="td text-center">
                                                         <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} className="h-4 w-4 rounded border-line bg-ink-850 text-ember-500 focus:ring-ember-500 focus:ring-offset-ink-950" />
                                                     </td>

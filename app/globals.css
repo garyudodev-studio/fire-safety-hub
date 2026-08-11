@@ -155,6 +155,26 @@
       font-mono text-xs font-semibold text-ember-300;
   }
 
+  /* ---- Colored badges / tones (dark by default, flipped in light via .theme-light) ---- */
+  .tone-ember {
+    @apply bg-ember-950/60 text-ember-300 border-ember-900/60;
+  }
+  .tone-sky {
+    @apply bg-sky-950/60 text-sky-300 border-sky-900/60;
+  }
+  .tone-orange {
+    @apply bg-orange-950/60 text-orange-300 border-orange-900/60;
+  }
+  .tone-amber {
+    @apply bg-amber-950/60 text-amber-300 border-amber-900/60;
+  }
+  .tone-rose {
+    @apply bg-rose-950/80 text-rose-300 border-rose-800/60;
+  }
+  .tone-emerald {
+    @apply bg-emerald-950/60 text-emerald-300 border-emerald-900/60;
+  }
+
   /* ---- Tables ---- */
   .table-wrap {
     @apply bg-ink-900 border border-line rounded-2xl overflow-hidden;
@@ -224,9 +244,25 @@
     }
   }
 
-  /* ---- Light theme scope (guest public view) ---- */
+  /* ---- Light theme scope (guest public view + dashboard toggle) ---- */
   .theme-light {
     color-scheme: light;
+    /* Flip the Tailwind `ink` neutral scale to light via the same CSS vars
+       the utilities reference, so the whole dashboard re-themes automatically. */
+    --color-ink-950: #f4f4f5;
+    --color-ink-900: #ffffff;
+    --color-ink-850: #fafafa;
+    --color-ink-800: #f0f0f1;
+    --color-ink-750: #e7e7e9;
+    --color-ink-700: #d6d6d9;
+    --color-ink-600: #a3a3ad;
+    --color-ink-500: #787882;
+    --color-ink-400: #575761;
+    --color-ink-300: #2c2c33;
+    --color-ink-200: #1c1c22;
+    --color-ink-100: #0c0c0f;
+    --color-line: rgba(28, 28, 34, 0.1);
+    --color-line-strong: rgba(28, 28, 34, 0.18);
   }
   .theme-light .panel {
     @apply bg-white border-stone-200 shadow-[0_1px_2px_rgba(28,25,23,0.04),0_8px_24px_-16px_rgba(28,25,23,0.12)];
@@ -253,6 +289,33 @@
   }
   .theme-light .chip {
     @apply border-stone-200 bg-stone-100 text-stone-600;
+  }
+  .theme-light .tone-ember {
+    @apply bg-ember-600/10 text-ember-700 border-ember-600/30;
+  }
+  .theme-light .tone-sky {
+    @apply bg-sky-100 text-sky-700 border-sky-200;
+  }
+  .theme-light .tone-orange {
+    @apply bg-orange-100 text-orange-700 border-orange-200;
+  }
+  .theme-light .tone-amber {
+    @apply bg-amber-100 text-amber-700 border-amber-200;
+  }
+  .theme-light .tone-rose {
+    @apply bg-rose-100 text-rose-700 border-rose-200;
+  }
+  .theme-light .tone-emerald {
+    @apply bg-emerald-100 text-emerald-700 border-emerald-200;
+  }
+  .theme-light .btn-danger-soft {
+    @apply bg-ember-600/10 text-ember-700 border-ember-600/30 hover:bg-ember-600/20;
+  }
+  .theme-light .icon-btn-danger {
+    @apply bg-ember-600/10 text-ember-700 border-ember-600/30 hover:bg-ember-600/20 hover:text-ember-800;
+  }
+  .theme-light .id-pill {
+    @apply bg-stone-100 text-ember-600 border-stone-200;
   }
   .theme-light .th {
     @apply text-stone-500;

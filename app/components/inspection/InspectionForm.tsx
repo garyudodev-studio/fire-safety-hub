@@ -359,8 +359,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {errorMsg && (
-        <div className="rounded-2xl border border-rose-900/60 bg-rose-950/60 p-4 text-sm text-rose-300 flex items-start gap-3 animate-fade">
-          <svg className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="rounded-2xl border p-4 text-sm flex items-start gap-3 animate-fade tone-rose">
+          <svg className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -370,8 +370,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
       )}
 
       {selectedEquipment && duplicate && (
-        <div className="rounded-2xl border border-amber-900/60 bg-amber-950/40 p-4 text-sm text-amber-300 flex items-start gap-3 animate-fade">
-          <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="rounded-2xl border p-4 text-sm flex items-start gap-3 animate-fade tone-amber">
+          <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -401,7 +401,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
             <button
               type="button"
               onClick={() => applyEquipmentSelection(null)}
-              className="text-xs text-ember-400 hover:text-ember-300 underline"
+              className="text-xs text-ember-400 hover:text-ember-500 underline"
             >
               Change Selection
             </button>
@@ -498,11 +498,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
           </div>
         ) : (
           /* Selected Equipment Card */
-          <div className="rounded-2xl border border-ember-500/30 bg-ember-950/15 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="rounded-2xl border border-ember-500/30 bg-ember-500/10 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-3">
                 <span className="text-lg font-bold text-ink-100 tracking-tight">{selectedEquipment.no_id}</span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-ember-500/20 text-ember-300 border border-ember-500/30">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg border tone-ember">
                   {selectedEquipment.type}
                 </span>
               </div>
@@ -582,8 +582,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                               currentVal === 'YES'
                                 ? isYesNormal
-                                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-950/40'
-                                  : 'bg-rose-600/20 text-rose-300 border-rose-500/50 shadow-md shadow-rose-950/40'
+                                  ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50 shadow-md shadow-emerald-950/40'
+                                  : 'bg-rose-600/20 text-rose-400 border-rose-500/50 shadow-md shadow-rose-950/40'
                                 : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
                             }`}
                           >
@@ -597,8 +597,8 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                               currentVal === 'NO'
                                 ? !isYesNormal
-                                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-950/40'
-                                  : 'bg-rose-600/20 text-rose-300 border-rose-500/50 shadow-md shadow-rose-950/40'
+                                  ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50 shadow-md shadow-emerald-950/40'
+                                  : 'bg-rose-600/20 text-rose-400 border-rose-500/50 shadow-md shadow-rose-950/40'
                                 : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
                             }`}
                           >
@@ -612,7 +612,7 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
                               onClick={() => handleAnswerChange(item.id, 'NA')}
                               className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                                 currentVal === 'NA'
-                                  ? 'bg-sky-600/20 text-sky-300 border-sky-500/50 shadow-md shadow-sky-950/40'
+                                  ? 'bg-sky-600/20 text-sky-400 border-sky-500/50 shadow-md shadow-sky-950/40'
                                   : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
                               }`}
                               title="Tidak memiliki komponen ini / Not Applicable"
@@ -764,11 +764,11 @@ export default function InspectionForm({ onSuccess, onCancel }: InspectionFormPr
               <p className="text-xs font-semibold text-ink-400 uppercase tracking-wider">Calculated Result</p>
               <div className="flex items-center gap-2 mt-1">
                 {computedStatus === 'PASS' ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold">
                     <span>✓</span> PASS / NORMAL
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-bold">
                     <span>⚠️</span> NEEDS ATTENTION / DEFECTIVE
                   </span>
                 )}

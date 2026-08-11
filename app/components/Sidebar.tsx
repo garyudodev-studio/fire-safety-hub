@@ -16,6 +16,8 @@ const FileTextIcon = () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2
 const LogOutIcon = () => <Icon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></Icon>;
 const BarChartIcon = () => <Icon><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></Icon>;
 const UsersIcon = () => <Icon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 1-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Icon>;
+const SunIcon = () => <Icon size={16}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></Icon>;
+const MoonIcon = () => <Icon size={16}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></Icon>;
 
 /** Returns initials (max 2 chars) from a display name */
 function getInitials(name: string): string {
@@ -71,7 +73,13 @@ function UserAvatar({
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({
+  theme = 'dark',
+  onToggleTheme,
+}: {
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
+}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -167,6 +175,15 @@ export default function Sidebar() {
               )}
             </svg>
           </button>
+          {!isCollapsed && onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="p-1.5 rounded-lg text-ink-400 hover:text-ink-100 hover:bg-ink-800 transition-colors"
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </button>
+          )}
         </div>
 
         {/* Nav items */}
@@ -221,7 +238,7 @@ export default function Sidebar() {
           <button
             onClick={handleSignOut}
             title={isCollapsed ? 'Sign Out' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 text-xs font-medium transition-all ${
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-500 hover:bg-ink-700/20 border border-transparent hover:border-ink-700/30 text-xs font-medium transition-all ${
               isCollapsed ? 'justify-center' : ''
             }`}
           >
@@ -252,6 +269,19 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Mobile theme toggle */}
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            className="flex flex-col items-center gap-1 py-1.5 px-2 rounded-xl text-ink-500 hover:text-ink-300 transition-all"
+          >
+            <div className="p-1 rounded-lg">
+              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </div>
+            <span className="text-[10px] tracking-tight leading-none">Theme</span>
+          </button>
+        )}
 
         {/* Mobile user / sign out */}
         <button

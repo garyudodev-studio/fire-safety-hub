@@ -389,16 +389,16 @@ export default function PICDashboard() {
                                     {/* Entity & Facility Scope Badges */}
                                     <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 w-full">
                                         {item.entity ? (
-                                            <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-ember-950/80 text-ember-300 border border-ember-900/60">
-                                                {item.entity}
-                                            </span>
+<span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full border tone-ember">
+                            {item.entity}
+                                        </span>
                                         ) : (
                                             <span className="text-[10px] text-ink-600 italic">All Entities</span>
                                         )}
                                         {item.facility ? (
-                                            <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-950/80 text-sky-300 border border-sky-900/60">
-                                                {item.facility}
-                                            </span>
+<span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full border tone-sky">
+                            {item.facility}
+                                        </span>
                                         ) : (
                                             <span className="text-[10px] text-ink-600 italic">All Facilities</span>
                                         )}
@@ -420,7 +420,7 @@ export default function PICDashboard() {
                                 <div className="mt-6 flex flex-col gap-2 w-full pt-4 border-t border-line">
                                     <button
                                         onClick={() => openAccountModal(item)}
-                                        className="btn btn-soft text-xs w-full justify-center text-ember-400 hover:text-ember-300"
+                                        className="btn btn-soft text-xs w-full justify-center text-ember-500 hover:text-ember-600"
                                     >
                                         Create User Account
                                     </button>
@@ -573,7 +573,7 @@ export default function PICDashboard() {
                         </p>
 
                         {accountError && (
-                            <div className="mb-4 rounded-xl border border-rose-900/60 bg-rose-950/50 p-3 text-xs text-rose-300">
+                            <div className="mb-4 rounded-xl border p-3 text-xs tone-rose">
                                 {accountError}
                             </div>
                         )}
