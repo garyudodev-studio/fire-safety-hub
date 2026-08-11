@@ -140,6 +140,11 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
   const supabase = getSupabaseClient();
 
   const [prevInspectorName, setPrevInspectorName] = useState<string | undefined>(inspection?.inspector_name);
+  const [prevInspectionId, setPrevInspectionId] = useState<string | undefined>(inspection?.id);
+  if (prevInspectionId !== inspection?.id) {
+    setPrevInspectionId(inspection?.id);
+    setImprovementRecord(null);
+  }
   if (prevInspectorName !== inspection?.inspector_name) {
     setPrevInspectorName(inspection?.inspector_name);
     setInspectorSignature(null);
@@ -180,8 +185,8 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
         .eq('inspection_id', inspection.id)
         .maybeSingle();
 
-      if (!cancelled && impData) {
-        setImprovementRecord(impData);
+      if (!cancelled) {
+        setImprovementRecord(impData || null);
       }
     };
 
