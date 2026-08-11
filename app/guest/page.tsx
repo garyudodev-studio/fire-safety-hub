@@ -572,6 +572,10 @@ function GuestReportsInner() {
 
   const unsafeRows = useMemo(() => filteredInspections.filter(i => i.status !== 'PASS'), [filteredInspections]);
   const safeRows   = useMemo(() => filteredInspections.filter(i => i.status === 'PASS'),  [filteredInspections]);
+  const resolvedCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'RESOLVED').length,
+    [unsafeRows, improvementsMap]
+  );
 
   const totalInspections = filteredInspections.length;
   const safeCount   = safeRows.length;
@@ -1118,9 +1122,16 @@ function GuestReportsInner() {
 
           {/* ── KPI Cards ── */}
           {hasPeriodFilter ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-stone-900" />
               <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-600" borderColor="border-rose-200" />
+              <KpiCard
+                label="Resolved (CAPA)"
+                value={resolvedCount}
+                sub="Corrective actions completed"
+                color="text-emerald-600"
+                borderColor="border-emerald-200"
+              />
               <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-600" borderColor="border-emerald-200" />
               <KpiCard
                 label="Not Inspected"
