@@ -179,14 +179,14 @@ function KpiCard({
   );
 }
 
-function PassRateRing({ rate }: { rate: number }) {
+function PassRateRing({ rate, resolved = 0 }: { rate: number; resolved?: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = (rate / 100) * circ;
   const color = rate >= 80 ? '#10b981' : rate >= 50 ? '#d97706' : '#dc2626';
   return (
     <div className="panel p-5 flex flex-col items-center justify-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">Pass Rate</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">Health Score</span>
       <div className="relative flex items-center justify-center">
         <svg width="96" height="96" viewBox="0 0 96 96">
           <circle cx="48" cy="48" r={r} fill="none" stroke="#e7e5e4" strokeWidth="8" />
@@ -201,7 +201,9 @@ function PassRateRing({ rate }: { rate: number }) {
         </svg>
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
-      <span className="text-xs text-stone-500">Health score</span>
+      <span className="text-xs text-stone-500">
+        {resolved > 0 ? `${resolved} resolved via CAPA` : 'Pass rate + CAPA'}
+      </span>
     </div>
   );
 }
@@ -576,11 +578,25 @@ function GuestReportsInner() {
     () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'RESOLVED').length,
     [unsafeRows, improvementsMap]
   );
+  const inProgressCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'IN_PROGRESS').length,
+    [unsafeRows, improvementsMap]
+  );
+  const openCount = useMemo(
+    () => unsafeRows.filter((i) => {
+      const imp = improvementsMap.get(i.id);
+      return !imp || imp.status === 'OPEN';
+    }).length,
+    [unsafeRows, improvementsMap]
+  );
 
   const totalInspections = filteredInspections.length;
   const safeCount   = safeRows.length;
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
+  const healthScore = totalInspections > 0
+    ? Math.round(((safeCount + resolvedCount) / totalInspections) * 100)
+    : 100;
 
   const periodText = useMemo(() => {
     if (selectedMonth && selectedWeek) return `Week ${selectedWeek} · ${formatMonthYear(selectedMonth)}`;
@@ -1122,15 +1138,22 @@ function GuestReportsInner() {
 
           {/* ── KPI Cards ── */}
           {hasPeriodFilter ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
               <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-stone-900" />
-              <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-600" borderColor="border-rose-200" />
+              <KpiCard label="Needs Attention"  value={openCount} sub="OPEN · needs action" color="text-rose-600" borderColor="border-rose-200" />
               <KpiCard
                 label="Resolved (CAPA)"
                 value={resolvedCount}
                 sub="Corrective actions completed"
                 color="text-emerald-600"
                 borderColor="border-emerald-200"
+              />
+              <KpiCard
+                label="In Progress (CAPA)"
+                value={inProgressCount}
+                sub="Corrective actions ongoing"
+                color="text-amber-600"
+                borderColor="border-amber-200"
               />
               <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-600" borderColor="border-emerald-200" />
               <KpiCard
@@ -1140,7 +1163,7 @@ function GuestReportsInner() {
                 color={notInspectedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}
                 borderColor={notInspectedCount > 0 ? 'border-amber-200' : 'border-emerald-200'}
               />
-              <PassRateRing rate={passRate} />
+              <PassRateRing rate={healthScore} resolved={resolvedCount} />
             </div>
           ) : (
             <div className="panel">
