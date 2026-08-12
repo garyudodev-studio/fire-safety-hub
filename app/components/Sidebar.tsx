@@ -309,6 +309,20 @@ export default function Sidebar({
 
         {/* ── Bottom user block + sign out ── */}
         <div className="p-3 border-t border-line space-y-2">
+          {/* Back to top button */}
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            title={isCollapsed ? 'Back to Top' : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-ink-400 hover:text-ink-200 hover:bg-ink-800/60 border border-line/50 text-xs font-medium transition-all ${
+              isCollapsed ? 'justify-center' : ''
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+            {!isCollapsed && <span>Back to Top</span>}
+          </button>
+
           {/* User info card */}
           <div className={`flex items-center gap-3 px-2 py-2 rounded-xl bg-ink-900/60 border border-line/50 ${isCollapsed ? 'justify-center' : ''}`}>
             <UserAvatar imageUrl={userImage} name={userName} size="md" />
@@ -444,6 +458,15 @@ export default function Sidebar({
             </div>
 
             <div className="p-3 border-t border-line space-y-2">
+              <button
+                onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setMobileMenu(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-ink-400 hover:text-ink-200 hover:bg-ink-800/60 border border-line/50 text-xs font-medium transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+                <span>Back to Top</span>
+              </button>
               <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-ink-900/60 border border-line/50">
                 <UserAvatar imageUrl={userImage} name={userName} size="md" />
                 <div className="flex flex-col min-w-0">

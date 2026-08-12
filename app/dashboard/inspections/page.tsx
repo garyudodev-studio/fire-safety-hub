@@ -7,7 +7,18 @@ import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 
 import InspectionForm from '@/app/components/inspection/InspectionForm';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
+import type { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
 import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/components/ui/CustomModal';
+
+interface EquipmentMaster {
+  id: string;
+  no_id: string;
+  type: string;
+  entity: string | null;
+  facility: string | null;
+  area: string | null;
+  location: string | null;
+}
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
@@ -58,14 +69,14 @@ function KpiCard({
   );
 }
 
-function PassRateRing({ rate }: { rate: number }) {
+function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = (rate / 100) * circ;
   const color = rate >= 80 ? '#34d399' : rate >= 50 ? '#fbbf24' : '#f87171';
   return (
     <div className="panel p-5 flex flex-col items-center justify-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Health Score</span>
       <div className="relative flex items-center justify-center">
         <svg width="96" height="96" viewBox="0 0 96 96">
           <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
@@ -80,7 +91,9 @@ function PassRateRing({ rate }: { rate: number }) {
         </svg>
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
-      <span className="text-xs text-ink-500">Health score</span>
+      <span className="text-xs text-ink-500">
+        {addressed > 0 ? `${addressed} resolved or in progress via CAPA` : 'Pass rate + CAPA'}
+      </span>
     </div>
   );
 }
@@ -106,6 +119,8 @@ export default function InspectionsPage() {
 
   const supabase = getSupabaseClient();
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [masterlist, setMasterlist] = useState<EquipmentMaster[]>([]);
+  const [improvementsMap, setImprovementsMap] = useState<Map<string, ImprovementRecord>>(new Map());
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -115,14 +130,29 @@ export default function InspectionsPage() {
         return;
       }
 
-      // Auto-set Inspector entity and facility from profile if logged in as inspector
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('role, entity, facility, pic:pic_id(entity, facility)')
-        .eq('id', sessionData.session.user.id)
-        .single();
+      const [profileRes, inspRes, masterRes, impRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('role, entity, facility, pic:pic_id(entity, facility)')
+          .eq('id', sessionData.session.user.id)
+          .single(),
+        supabase
+          .from('inspections')
+          .select(`
+            *,
+            equipment:equipment_id(location, facility, area, entity)
+          `)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('equipment')
+          .select('id, no_id, type, entity, facility, area, location'),
+        supabase
+          .from('improvements')
+          .select('*'),
+      ]);
 
-      if (userProfile) {
+      if (profileRes.data) {
+        const userProfile = profileRes.data;
         if (userProfile.role) setUserRole(userProfile.role);
         const assignedEntity = userProfile.entity || userProfile.pic?.entity;
         const assignedFacility = userProfile.facility || userProfile.pic?.facility;
@@ -130,16 +160,16 @@ export default function InspectionsPage() {
         if (assignedFacility) setSelectedFacility(assignedFacility);
       }
 
-      const { data, error } = await supabase
-        .from('inspections')
-        .select(`
-          *,
-          equipment:equipment_id(location, facility, area, entity)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setInspections(data as InspectionRecord[]);
+      if (!inspRes.error && inspRes.data) {
+        setInspections(inspRes.data as InspectionRecord[]);
+      }
+      if (!masterRes.error && masterRes.data) {
+        setMasterlist(masterRes.data as EquipmentMaster[]);
+      }
+      if (impRes.data) {
+        const map = new Map<string, ImprovementRecord>();
+        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
+        setImprovementsMap(map);
       }
       setLoading(false);
     };
@@ -232,9 +262,58 @@ export default function InspectionsPage() {
 
   // Metrics calculation
   const totalInspections = filteredInspections.length;
-  const passCount = filteredInspections.filter((i) => i.status === 'PASS').length;
-  const needsAttentionCount = filteredInspections.filter((i) => i.status !== 'PASS').length;
-  const passRate = totalInspections > 0 ? Math.round((passCount / totalInspections) * 100) : 100;
+  const safeCount = filteredInspections.filter((i) => i.status === 'PASS').length;
+  const unsafeRows = filteredInspections.filter((i) => i.status !== 'PASS');
+  const resolvedCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'RESOLVED').length,
+    [unsafeRows, improvementsMap]
+  );
+  const inProgressCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'IN_PROGRESS').length,
+    [unsafeRows, improvementsMap]
+  );
+  const openCount = useMemo(
+    () => unsafeRows.filter((i) => {
+      const imp = improvementsMap.get(i.id);
+      return !imp || imp.status === 'OPEN';
+    }).length,
+    [unsafeRows, improvementsMap]
+  );
+  const healthScore = totalInspections > 0
+    ? Math.round(((safeCount + resolvedCount + inProgressCount) / totalInspections) * 100)
+    : 100;
+
+  // Coverage vs masterlist (same scope as reports page: type/entity/facility only)
+  const filteredMasterlist = useMemo(() => {
+    return masterlist.filter((e) => {
+      const matchType = selectedType === 'All' || e.type === selectedType;
+      const matchEntity = selectedEntity === 'All' || e.entity === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || e.facility === selectedFacility;
+      return matchType && matchEntity && matchFacility;
+    });
+  }, [masterlist, selectedType, selectedEntity, selectedFacility]);
+
+  const scopeInspections = useMemo(() => {
+    return inspections.filter((item) => {
+      const matchType = selectedType === 'All' || item.equipment_type === selectedType;
+      const entity = item.equipment?.entity ?? '';
+      const facility = item.equipment?.facility ?? '';
+      const matchEntity = selectedEntity === 'All' || entity === selectedEntity;
+      const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
+      return matchType && matchEntity && matchFacility;
+    });
+  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+
+  const inspectedEquipmentIds = useMemo(
+    () => new Set(scopeInspections.map((i) => i.equipment_id)),
+    [scopeInspections]
+  );
+  const totalMasterlistCount = filteredMasterlist.length;
+  const inspectedCount = useMemo(
+    () => filteredMasterlist.filter((e) => inspectedEquipmentIds.has(e.id)).length,
+    [filteredMasterlist, inspectedEquipmentIds]
+  );
+  const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
   // Data is only shown once the user picks a period filter (month/week).
   const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
@@ -409,30 +488,44 @@ export default function InspectionsPage() {
 
           {/* Metrics Cards */}
           {hasPeriodFilter ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <KpiCard label="Total Inspections" value={totalInspections} sub="Logged records" color="text-ink-100" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+              <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
               <KpiCard
                 label="Needs Attention"
-                value={needsAttentionCount}
-                sub="Defects flagged"
+                value={openCount}
+                sub="OPEN · needs action"
                 color="text-rose-400"
                 borderColor="border-rose-900/30"
               />
               <KpiCard
-                label="Checklist Standard"
-                value="100%"
-                sub="Yes/No · Photo verified"
-                color="text-ember-400"
-                borderColor="border-ember-900/30"
+                label="Resolved (CAPA)"
+                value={resolvedCount}
+                sub="Corrective actions completed"
+                color="text-emerald-400"
+                borderColor="border-emerald-900/30"
               />
               <KpiCard
-                label="Passed Items"
-                value={passCount}
+                label="In Progress (CAPA)"
+                value={inProgressCount}
+                sub="Corrective actions ongoing"
+                color="text-amber-400"
+                borderColor="border-amber-900/30"
+              />
+              <KpiCard
+                label="Safe"
+                value={safeCount}
                 sub="PASS results"
                 color="text-emerald-400"
                 borderColor="border-emerald-900/30"
               />
-              <PassRateRing rate={passRate} />
+              <KpiCard
+                label="Not Inspected"
+                value={notInspectedCount}
+                sub={`of ${totalMasterlistCount} total equipment`}
+                color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
+                borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
+              />
+              <PassRateRing rate={healthScore} addressed={resolvedCount + inProgressCount} />
             </div>
           ) : (
             <div className="panel">
@@ -446,7 +539,7 @@ export default function InspectionsPage() {
               <FilterRequired scope="inspection logs" />
             ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="mobile-cards w-full text-left">
                 <thead>
                   <tr className="border-b border-line bg-ink-950/40">
                     <th className="th">Equipment ID</th>
@@ -476,10 +569,11 @@ export default function InspectionsPage() {
                     filteredInspections.map((item) => {
                       const entity = item.equipment?.entity || '';
                       const facility = item.equipment?.facility || '';
+                      const isPass = item.status === 'PASS';
                       return (
                         <tr key={item.id} className="transition-colors hover:bg-white/[0.03]">
-                          <td className="td font-bold text-ink-100">{item.equipment_no_id}</td>
-                          <td className="td">
+                          <td data-label="Equipment ID" className="td font-bold text-ink-100">{item.equipment_no_id}</td>
+                          <td data-label="Type" className="td">
                             <span
                               className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(
                                 item.equipment_type
@@ -488,31 +582,70 @@ export default function InspectionsPage() {
                               {item.equipment_type}
                             </span>
                           </td>
-                          <td className="td text-xs">
+                          <td data-label="Entity / Facility" className="td text-xs">
                             {entity && <div className="text-ink-200 font-medium">{entity}</div>}
                             {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
                             {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                           </td>
-                          <td className="td text-xs text-ink-300">
+                          <td data-label="Date / Period" className="td text-xs text-ink-300">
                             <div>{item.inspection_date}</div>
                             <div className="text-ink-500 text-[11px]">
                               {item.week} ({item.month_year})
                             </div>
                           </td>
-                          <td className="td text-xs text-ink-200">{item.inspector_name}</td>
-                          <td className="td">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${
-                                item.status === 'PASS'
-                                  ? 'tone-emerald'
-                                  : 'tone-rose'
-                              }`}
-                            >
-                              {item.status === 'PASS' ? '✓ PASS' : '⚠️ NEEDS ATTENTION'}
-                            </span>
+                          <td data-label="Inspector" className="td text-xs text-ink-200">{item.inspector_name}</td>
+                          <td data-label="Status" className="td">
+                            {(() => {
+                              const improvement = improvementsMap.get(item.id);
+                              const shownAsCapa = !isPass && !!improvement;
+                              if (shownAsCapa) {
+                                const capaResolved = improvement.status === 'RESOLVED';
+                                const capaInProgress = improvement.status === 'IN_PROGRESS';
+                                return (
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                    capaResolved ? 'tone-emerald' : capaInProgress ? 'tone-amber' : 'tone-rose'
+                                  }`}>
+                                    {capaResolved ? (
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    ) : capaInProgress ? (
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                                      </svg>
+                                    ) : (
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                        <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                      </svg>
+                                    )}
+                                    {capaResolved ? 'RESOLVED' : capaInProgress ? 'IN PROGRESS' : 'OPEN'}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                    isPass ? 'tone-emerald' : 'tone-rose'
+                                  }`}
+                                >
+                                  {isPass ? (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  ) : (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                  )}
+                                  {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                                </span>
+                              );
+                            })()}
                           </td>
-                          <td className="td text-right">
-                            <div className="flex items-center justify-end gap-2">
+                          <td data-label="Actions" className="td text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                               {userRole === 'admin' && (
                                 <button
                                   onClick={() => setEditingRecord(item)}

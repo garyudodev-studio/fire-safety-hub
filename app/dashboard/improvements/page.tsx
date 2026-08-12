@@ -210,15 +210,15 @@ export default function ImprovementsPage() {
 
       {/* Filters & Search */}
       <div className="panel p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 text-xs w-full md:w-auto">
           {/* Status filter */}
-          <div className="flex items-center gap-1.5 bg-ink-950 p-1 rounded-lg border border-line">
+          <div className="flex flex-wrap items-center gap-1.5 bg-ink-950 p-1.5 rounded-lg border border-line">
             <span className="text-ink-500 font-semibold px-2">Status:</span>
             {['ALL', 'OPEN', 'IN_PROGRESS', 'RESOLVED'].map((st) => (
               <button
                 key={st}
                 onClick={() => setSelectedStatus(st)}
-                className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                className={`px-2.5 py-1 rounded font-semibold transition-colors whitespace-nowrap ${
                   selectedStatus === st
                     ? 'bg-ink-800 text-ink-100 border border-line'
                     : 'text-ink-400 hover:text-ink-200'
@@ -233,7 +233,7 @@ export default function ImprovementsPage() {
           <select
             value={selectedFacility}
             onChange={(e) => setSelectedFacility(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-ink-950 border border-line text-ink-200 focus:outline-none"
+            className="px-3 py-1.5 rounded-lg bg-ink-950 border border-line text-ink-200 focus:outline-none w-full sm:w-auto"
           >
             <option value="ALL">All Facilities</option>
             {uniqueFacilities.filter((f) => f !== 'ALL').map((f) => (
@@ -245,7 +245,7 @@ export default function ImprovementsPage() {
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-ink-950 border border-line text-ink-200 focus:outline-none"
+            className="px-3 py-1.5 rounded-lg bg-ink-950 border border-line text-ink-200 focus:outline-none w-full sm:w-auto"
           >
             <option value="ALL">All Types</option>
             {uniqueTypes.filter((t) => t !== 'ALL').map((t) => (

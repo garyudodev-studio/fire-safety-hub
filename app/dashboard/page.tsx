@@ -1096,7 +1096,7 @@ export default function AdminDashboard() {
                                             <th className="th">Location</th>
                                             <th className="th">PIC 1</th>
                                             <th className="th">PIC 2</th>
-                                            <th className="th text-center">Actions</th>
+                                            <th className="th text-center w-[88px]">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-line">
@@ -1119,10 +1119,10 @@ export default function AdminDashboard() {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="td text-ink-300">{item.entity || '-'}</td>
-                                                    <td className="td text-ink-300">{item.facility || '-'}</td>
-                                                    <td className="td text-ink-300">{item.area || '-'}</td>
-                                                    <td className="td max-w-[200px] truncate text-ink-200">{item.location || '-'}</td>
+                                                    <td className="td max-w-[110px] truncate text-ink-300">{item.entity || '-'}</td>
+                                                    <td className="td max-w-[110px] truncate text-ink-300">{item.facility || '-'}</td>
+                                                    <td className="td max-w-[110px] truncate text-ink-300">{item.area || '-'}</td>
+                                                    <td className="td max-w-[140px] truncate text-ink-200">{item.location || '-'}</td>
                                                     <td className="td">
                                                         <div className="flex items-center gap-2">
                                                             {item.pic_1?.image_profile ? (

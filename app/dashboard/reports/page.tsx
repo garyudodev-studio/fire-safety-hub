@@ -86,14 +86,14 @@ function KpiCard({
   );
 }
 
-function PassRateRing({ rate }: { rate: number }) {
+function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = (rate / 100) * circ;
   const color = rate >= 80 ? '#34d399' : rate >= 50 ? '#fbbf24' : '#f87171';
   return (
     <div className="panel p-5 flex flex-col items-center justify-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Pass Rate</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Health Score</span>
       <div className="relative flex items-center justify-center">
         <svg width="96" height="96" viewBox="0 0 96 96">
           <circle cx="48" cy="48" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
@@ -108,7 +108,9 @@ function PassRateRing({ rate }: { rate: number }) {
         </svg>
         <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
-      <span className="text-xs text-ink-500">Health score</span>
+      <span className="text-xs text-ink-500">
+        {addressed > 0 ? `${addressed} resolved or in progress via CAPA` : 'Pass rate + CAPA'}
+      </span>
     </div>
   );
 }
@@ -527,11 +529,29 @@ export default function ReportsPage() {
 
   const unsafeRows = useMemo(() => filteredInspections.filter(i => i.status !== 'PASS'), [filteredInspections]);
   const safeRows   = useMemo(() => filteredInspections.filter(i => i.status === 'PASS'),  [filteredInspections]);
+  const resolvedCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'RESOLVED').length,
+    [unsafeRows, improvementsMap]
+  );
+  const inProgressCount = useMemo(
+    () => unsafeRows.filter((i) => improvementsMap.get(i.id)?.status === 'IN_PROGRESS').length,
+    [unsafeRows, improvementsMap]
+  );
+  const openCount = useMemo(
+    () => unsafeRows.filter((i) => {
+      const imp = improvementsMap.get(i.id);
+      return !imp || imp.status === 'OPEN';
+    }).length,
+    [unsafeRows, improvementsMap]
+  );
 
   const totalInspections = filteredInspections.length;
   const safeCount   = safeRows.length;
   const unsafeCount = unsafeRows.length;
   const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
+  const healthScore = totalInspections > 0
+    ? Math.round(((safeCount + resolvedCount + inProgressCount) / totalInspections) * 100)
+    : 100;
 
   // Coverage KPI
   // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
@@ -713,7 +733,7 @@ export default function ReportsPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="mobile-cards w-full text-left">
                 <thead>
                   <tr className="border-b border-line bg-ink-950/40">
                     <th className="th">Equipment ID</th>
@@ -738,30 +758,30 @@ export default function ReportsPage() {
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
-                        <td className={`td font-bold ${isUnsafe ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <td data-label="Equipment ID" className={`td font-bold ${isUnsafe ? 'text-rose-400' : 'text-emerald-400'}`}>
                           {item.equipment_no_id}
                         </td>
-                        <td className="td">
+                        <td data-label="Type" className="td">
                           <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
                             {item.equipment_type}
                           </span>
                         </td>
-                        <td className="td text-xs">
+                        <td data-label="Entity / Facility" className="td text-xs">
                           {entity && <div className="text-ink-200 font-medium">{entity}</div>}
                           {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
                           {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                         </td>
-                        <td className="td text-xs text-ink-300">
+                        <td data-label="Date / Period" className="td text-xs text-ink-300">
                           <div>{item.inspection_date}</div>
                           <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
                         </td>
-                        <td className="td text-xs text-ink-200">{item.inspector_name}</td>
-                        <td className="td text-xs text-ink-400 max-w-[180px] truncate">
+                        <td data-label="Inspector" className="td text-xs text-ink-200">{item.inspector_name}</td>
+                        <td data-label="Remarks" className="td text-xs text-ink-400 max-w-[180px] truncate">
                           {item.remarks || <span className="italic text-ink-600">No remarks</span>}
                         </td>
                         {isUnsafe && (
-                          <td className="td text-xs">
-                            <div className="flex items-center gap-2">
+                          <td data-label="CAPA Status" className="td text-xs">
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                                 impStatus === 'RESOLVED'
                                   ? 'tone-emerald'
@@ -784,8 +804,8 @@ export default function ReportsPage() {
                             </div>
                           </td>
                         )}
-                        <td className="td text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        <td data-label="Action" className="td text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                             {userRole === 'admin' && (
                               <button
                                 onClick={(e) => {
@@ -861,7 +881,7 @@ export default function ReportsPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="mobile-cards w-full text-left">
                 <thead>
                   <tr className="border-b border-line bg-ink-950/40">
                     <th className="th">Equipment ID</th>
@@ -874,21 +894,21 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-line">
                   {uninspSlice.map((equip) => (
                     <tr key={equip.id} className="transition-colors hover:bg-ink-700/10">
-                      <td className="td font-bold text-amber-400">{equip.no_id}</td>
-                      <td className="td">
+                      <td data-label="Equipment ID" className="td font-bold text-amber-400">{equip.no_id}</td>
+                      <td data-label="Type" className="td">
                         <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
                           {equip.type}
                         </span>
                       </td>
-                      <td className="td text-xs">
+                      <td data-label="Entity / Facility" className="td text-xs">
                         {equip.entity && <div className="text-ink-200 font-medium">{equip.entity}</div>}
                         {equip.facility && <div className="text-ink-500 text-[11px]">{equip.facility}</div>}
                         {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
                       </td>
-                      <td className="td text-xs text-ink-300">
+                      <td data-label="Area / Location" className="td text-xs text-ink-300">
                         {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
                       </td>
-                      <td className="td text-right">
+                      <td data-label="Status" className="td text-right">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border tone-amber">
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
@@ -961,13 +981,15 @@ export default function ReportsPage() {
                 </div>
                 <div className="flex items-end gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${passRate >= 80 ? 'tone-emerald' : 'tone-amber'}`}>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${healthScore >= 80 ? 'tone-emerald' : 'tone-amber'}`}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      {passRate}% Pass Rate
+                      {healthScore}% Pass Rate
                     </span>
-                    <span className="text-[11px] text-ink-500">{safeCount} PASS · {unsafeCount} NEEDS ATTENTION</span>
+                    <span className="text-[11px] text-ink-500">
+                      {safeCount} PASS · {resolvedCount} Resolved · {inProgressCount} In Progress · {openCount} Needs Action
+                    </span>
                   </div>
                   <button
                     onClick={handlePrintReport}
@@ -988,7 +1010,7 @@ export default function ReportsPage() {
 
             {/* ── Report table with inspection photos ── */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="mobile-cards w-full text-left">
                 <thead>
                   <tr className="border-b border-line bg-ink-950/40">
                     <th className="th">Photo</th>
@@ -1013,7 +1035,7 @@ export default function ReportsPage() {
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
-                        <td className="td">
+                        <td data-label="Photo" className="td">
                           {photos.length > 0 ? (
                             <ProtectedImage
                               src={photos[0]}
@@ -1031,42 +1053,73 @@ export default function ReportsPage() {
                             </span>
                           )}
                         </td>
-                        <td className={`td font-bold ${isPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                <td data-label="Equipment ID" className={`td font-bold ${isPass ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {item.equipment_no_id}
                         </td>
-                        <td className="td">
+                        <td data-label="Type" className="td">
                           <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
                             {item.equipment_type}
                           </span>
                         </td>
-                        <td className="td text-xs">
+                        <td data-label="Entity / Facility" className="td text-xs">
                           {entity && <div className="text-ink-200 font-medium">{entity}</div>}
                           {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
                           {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                         </td>
-                        <td className="td text-xs text-ink-300">
+                        <td data-label="Date / Period" className="td text-xs text-ink-300">
                           <div>{item.inspection_date}</div>
                           <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
                         </td>
-                        <td className="td text-xs text-ink-200">{item.inspector_name}</td>
-                        <td className="td">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                            isPass ? 'tone-emerald' : 'tone-rose'
-                          }`}>
-                            {isPass ? (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            ) : (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                              </svg>
-                            )}
-                            {isPass ? 'PASS' : 'NEEDS ATTENTION'}
-                          </span>
+                        <td data-label="Inspector" className="td text-xs text-ink-200">{item.inspector_name}</td>
+                        <td data-label="Status" className="td">
+                          {(() => {
+                            const improvement = improvementsMap.get(item.id);
+                            const shownAsCapa = !isPass && !!improvement;
+                            if (shownAsCapa) {
+                              const capaResolved = improvement.status === 'RESOLVED';
+                              const capaInProgress = improvement.status === 'IN_PROGRESS';
+                              return (
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                  capaResolved ? 'tone-emerald' : capaInProgress ? 'tone-amber' : 'tone-rose'
+                                }`}>
+                                  {capaResolved ? (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  ) : capaInProgress ? (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                                    </svg>
+                                  ) : (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                  )}
+                                  {capaResolved ? 'RESOLVED' : capaInProgress ? 'IN PROGRESS' : 'OPEN'}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                isPass ? 'tone-emerald' : 'tone-rose'
+                              }`}>
+                                {isPass ? (
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                ) : (
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                  </svg>
+                                )}
+                                {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                              </span>
+                            );
+                          })()}
                         </td>
-                        <td className="td text-xs text-ink-400 max-w-[200px] truncate">
+                        <td data-label="Remarks" className="td text-xs text-ink-400 max-w-[200px] truncate">
                           {item.remarks || <span className="italic text-ink-600">No remarks</span>}
                         </td>
                       </tr>
@@ -1211,9 +1264,23 @@ export default function ReportsPage() {
 
           {/* ── KPI Cards ── */}
           {hasPeriodFilter ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
               <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
-              <KpiCard label="Needs Attention"  value={unsafeCount} sub="Action required" color="text-rose-400" borderColor="border-rose-900/30" />
+              <KpiCard label="Needs Attention"  value={openCount} sub="OPEN · needs action" color="text-rose-400" borderColor="border-rose-900/30" />
+              <KpiCard
+                label="Resolved (CAPA)"
+                value={resolvedCount}
+                sub="Corrective actions completed"
+                color="text-emerald-400"
+                borderColor="border-emerald-900/30"
+              />
+              <KpiCard
+                label="In Progress (CAPA)"
+                value={inProgressCount}
+                sub="Corrective actions ongoing"
+                color="text-amber-400"
+                borderColor="border-amber-900/30"
+              />
               <KpiCard label="Safe"             value={safeCount}   sub="PASS results"    color="text-emerald-400" borderColor="border-emerald-900/30" />
               <KpiCard
                 label="Not Inspected"
@@ -1222,7 +1289,7 @@ export default function ReportsPage() {
                 color={notInspectedCount > 0 ? 'text-amber-400' : 'text-emerald-400'}
                 borderColor={notInspectedCount > 0 ? 'border-amber-900/30' : 'border-emerald-900/30'}
               />
-              <PassRateRing rate={passRate} />
+              <PassRateRing rate={healthScore} addressed={resolvedCount + inProgressCount} />
             </div>
           ) : (
             <div className="panel">
