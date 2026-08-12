@@ -593,7 +593,6 @@ function GuestReportsInner() {
   const totalInspections = filteredInspections.length;
   const safeCount   = safeRows.length;
   const unsafeCount = unsafeRows.length;
-  const passRate    = totalInspections > 0 ? Math.round((safeCount / totalInspections) * 100) : 100;
   const healthScore = totalInspections > 0
     ? Math.round(((safeCount + resolvedCount + inProgressCount) / totalInspections) * 100)
     : 100;
@@ -915,14 +914,16 @@ function GuestReportsInner() {
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                    passRate >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                    healthScore >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    {passRate}% Pass Rate
+                    {healthScore}% Pass Rate
                   </span>
-                  <span className="text-[11px] text-stone-500">{safeCount} PASS · {unsafeCount} NEEDS ATTENTION</span>
+                  <span className="text-[11px] text-stone-500">
+                    {safeCount} PASS · {resolvedCount} Resolved · {inProgressCount} In Progress · {openCount} Needs Action
+                  </span>
                 </div>
               </div>
             </div>
@@ -991,23 +992,32 @@ function GuestReportsInner() {
                         </td>
                         <td className="td text-xs text-stone-700">{item.inspector_name}</td>
                         <td className="td">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                            isPass
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}>
-                            {isPass ? (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            ) : (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                              </svg>
-                            )}
-                            {isPass ? 'PASS' : 'NEEDS ATTENTION'}
-                          </span>
+                          {(() => {
+                            const improvement = improvementsMap.get(item.id);
+                            const shownAsCapa = !isPass && !!improvement;
+                            if (shownAsCapa) {
+                              return <CapaStatusBadge improvement={improvement} />;
+                            }
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                                isPass
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}>
+                                {isPass ? (
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                ) : (
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                  </svg>
+                                )}
+                                {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="td text-xs text-stone-500 max-w-[200px] truncate">
                           {item.remarks || <span className="italic text-stone-400">No remarks</span>}
