@@ -76,24 +76,47 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
     setIsScanning(true);
     setUsingCamera(true);
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
+    const attachStream = async (stream: MediaStream) => {
       streamRef.current = stream;
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) return false;
       video.srcObject = stream;
       await video.play();
       setCameraError(null);
-      scanLoop();
+      return true;
+    };
+
+    try {
+      // Try back camera first, then fall back to any available camera.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false,
+        });
+        if (await attachStream(stream)) {
+          scanLoop();
+          return;
+        }
+      } catch {
+        // fall through to default camera
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      if (await attachStream(stream)) {
+        scanLoop();
+      }
     } catch {
       setCameraError('Camera is not available or permission was denied. Use the "Upload QR Photo" option instead.');
       stopCamera();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopCamera]);
+
+  // Automatically start the camera as soon as the modal opens
+  useEffect(() => {
+    const t = setTimeout(() => startCamera(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,6 +185,7 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
           <div className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-square flex items-center justify-center">
             <video
               ref={videoRef}
+              autoPlay
               playsInline
               muted
               className="w-full h-full object-cover"
