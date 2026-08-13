@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { getChecklistForType, EquipmentChecklist } from '@/app/lib/inspectionChecklists';
 import CameraCapture from './CameraCapture';
+import QRScannerModal from '@/app/components/ui/QRScannerModal';
 
 interface EquipmentItem {
   id: string;
@@ -51,6 +52,9 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
   const [inspectionDate, setInspectionDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
   
   // Auto calculated Week and Month/Year derived from Inspection Date
   const dateParts = inspectionDate.split('-');
@@ -248,6 +252,26 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
   const handleSelectEquipment = (item: EquipmentItem) => {
     applyEquipmentSelection(item);
     setSearchQuery('');
+  };
+
+  const handleQrScan = (scanned: string) => {
+    setShowQrScanner(false);
+    setQrError(null);
+
+    const value = scanned.trim();
+
+    // Match by UUID (the ID tag QR encodes the equipment's unique id)
+    const match =
+      masterlist.find((e) => e.id === value) ||
+      masterlist.find((e) => e.no_id.toLowerCase() === value.toLowerCase());
+
+    if (match) {
+      applyEquipmentSelection(match);
+      setSearchQuery('');
+      return;
+    }
+
+    setQrError(`No equipment found for scanned code: "${value.slice(0, 50)}". Try again or select manually.`);
   };
 
   const handleAnswerChange = (itemId: string, value: 'YES' | 'NO' | 'NA') => {
@@ -495,7 +519,7 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by Equipment ID (e.g. D3-001, B1-001) or location..."
-                className="input pl-10 text-xs"
+                className="input pl-10 pr-24 text-xs"
               />
               <svg
                 className="absolute left-3.5 top-3.5 w-4 h-4 text-ink-500"
@@ -504,7 +528,28 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
+              <button
+                type="button"
+                onClick={() => {
+                  setQrError(null);
+                  setShowQrScanner(true);
+                }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-lg bg-ember-600/15 border border-ember-900/50 text-ember-400 px-3 py-2 text-xs font-semibold hover:bg-ember-600/25 transition-colors"
+                title="Scan the equipment ID tag QR code to auto-select"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+                  <path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
+                </svg>
+                Scan QR
+              </button>
             </div>
+
+            {qrError && (
+              <div className="rounded-xl border p-3 text-xs leading-relaxed tone-rose">
+                {qrError}
+              </div>
+            )}
 
             {fetchingData ? (
               <div className="py-8 text-center text-xs text-ink-500 animate-pulse">
@@ -854,6 +899,13 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
             </div>
           </div>
         </div>
+      )}
+
+      {showQrScanner && (
+        <QRScannerModal
+          onScan={handleQrScan}
+          onClose={() => setShowQrScanner(false)}
+        />
       )}
     </form>
   );

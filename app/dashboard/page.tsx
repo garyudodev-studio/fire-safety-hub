@@ -30,6 +30,7 @@ const EditIcon = () => <Icon><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0
 const ChevronDown = () => <Icon size={14}><path d="m6 9 6 6 6-6" /></Icon>;
 const GridIcon = () => <Icon><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></Icon>;
 const ListIcon = () => <Icon><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></Icon>;
+const TagIcon = () => <Icon><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></Icon>;
 
 const initialFormData = {
     no_id: '',
@@ -89,6 +90,16 @@ function getFormTemplate(type: string): string {
         case 'Fire Extinguisher': return '/form_checklist/form checklist_fire extinguishers.html';
         case 'Emergency Lamp': return '/form_checklist/form checklist_emergency lamp.html';
         default: return '/form_checklist/form checklist_fire alarm.html';
+    }
+}
+
+function getTagTemplate(type: string): string {
+    switch (type) {
+        case 'Fire Alarm': return '/id_tag_equipment/template tag_alarm.html';
+        case 'Fire Hydrant': return '/id_tag_equipment/template tag_hydrant.html';
+        case 'Fire Extinguisher': return '/id_tag_equipment/template tag_apar.html';
+        case 'Emergency Lamp': return '/id_tag_equipment/template tag_emergencylamp.html';
+        default: return '/id_tag_equipment/template tag_alarm.html';
     }
 }
 
@@ -574,6 +585,134 @@ export default function AdminDashboard() {
         }
     };
 
+    // --- Print ID Tags ---
+
+    const generatePrintTagHTML = async (items: Equipment[]) => {
+        if (items.length === 0) return;
+
+        let finalHtml = '';
+        let baseHeader = '';
+        const baseFooter = `
+<script>
+  window.addEventListener('load', function() {
+    setTimeout(function() { window.print(); }, 600);
+  });
+</script>
+</body></html>`;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const templatePath = getTagTemplate(item.type);
+
+            const res = await fetch(templatePath);
+            const html = await res.text();
+
+            if (i === 0) {
+                const bodyMatch = html.match(/([\s\S]*?<body[^>]*>)/);
+                if (bodyMatch) {
+                    baseHeader = bodyMatch[1];
+                }
+            }
+
+            // Extract the single .safety-tag block (the outer closing </div> sits right before </body>)
+            const tagMatch = html.match(/(<div class="safety-tag[\s\S]*?<\/div>)\s*<\/body>/);
+            let tagHtml = tagMatch ? tagMatch[1] : html;
+
+            const idValue = item.no_id || '';
+
+            // Replace the tag ID placeholder (e.g. D1-001)
+            tagHtml = tagHtml.replace(/<h2 class="tag-id">[^<]*<\/h2>/, `<h2 class="tag-id">${idValue}</h2>`);
+
+            // QR data: encode the equipment's unique UUID (item.id)
+            const qrTarget = item.id;
+            const qrEncoded = encodeURIComponent(qrTarget);
+            tagHtml = tagHtml.replace(/data=[^"']*/, `data=${qrEncoded}`);
+
+            finalHtml += tagHtml;
+        }
+
+        baseHeader = baseHeader.replace('</head>', `
+        <style>
+            @media print {
+                @page { size: A4 portrait; margin: 6mm; }
+                body {
+                    margin: 0;
+                    padding: 0;
+                    background: white !important;
+                    display: block !important;
+                    gap: 0;
+                    flex-wrap: nowrap;
+                }
+                .tag-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 37mm);
+                    grid-auto-rows: 51.5mm;
+                    gap: 2mm;
+                    justify-content: center;
+                    align-items: start;
+                }
+                .safety-tag {
+                    width: 260px !important;
+                    height: 360px !important;
+                    margin: 0 !important;
+                    border-radius: 2mm !important;
+                    box-shadow: none !important;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                    transform: scale(0.54);
+                    transform-origin: top left;
+                }
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+            }
+        </style>
+        </head>`);
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(baseHeader + `<body><div class="tag-grid">` + finalHtml + `</div>` + baseFooter);
+            printWindow.document.close();
+        }
+    };
+
+    const handlePrintTag = async (item: Equipment) => {
+        try {
+            await generatePrintTagHTML([item]);
+        } catch {
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load ID tag template.', type: 'error' });
+        }
+    };
+
+    const handlePrintTagsFiltered = async () => {
+        if (filteredEquipment.length === 0) return;
+        try {
+            await generatePrintTagHTML(filteredEquipment);
+        } catch {
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load ID tag templates.', type: 'error' });
+        }
+    };
+
+    const handlePrintTagsAll = async () => {
+        if (equipment.length === 0) return;
+        try {
+            await generatePrintTagHTML(equipment);
+        } catch {
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load ID tag templates.', type: 'error' });
+        }
+    };
+
+    const handlePrintTagsSelected = async () => {
+        if (selectedIds.size === 0) return;
+        const items = equipment.filter(e => selectedIds.has(e.id));
+        try {
+            await generatePrintTagHTML(items);
+        } catch {
+            setAlertModal({ isOpen: true, title: 'Error', message: 'Failed to load ID tag templates.', type: 'error' });
+        }
+    };
+
     const handlePrint = async (item: Equipment) => {
         try {
             await generatePrintHTML([item]);
@@ -810,6 +949,9 @@ export default function AdminDashboard() {
                         <button onClick={handleExport} className="btn btn-soft">
                             <ExportIcon /> Export
                         </button>
+                        <button onClick={handlePrintTagsAll} className="btn btn-soft" title="Print ID tags for all equipment">
+                            <TagIcon /> Print All Tags
+                        </button>
                         <button onClick={downloadTemplate} className="btn btn-soft">
                             <TemplateIcon /> Template
                         </button>
@@ -874,12 +1016,20 @@ export default function AdminDashboard() {
                         )}
 
                         {filteredEquipment.length > 0 && filterType && (
+                            <>
                             <button
                                 onClick={handlePrintFiltered}
                                 className="btn btn-soft px-3 py-2.5 text-xs md:flex-none"
                             >
                                 <PrintIcon /> Print Filtered
                             </button>
+                            <button
+                                onClick={handlePrintTagsFiltered}
+                                className="btn btn-soft px-3 py-2.5 text-xs md:flex-none"
+                            >
+                                <TagIcon /> Print Tags
+                            </button>
+                            </>
                         )}
                     </div>
 
@@ -948,6 +1098,15 @@ export default function AdminDashboard() {
                                 className="btn btn-ghost px-3 py-2 text-xs disabled:opacity-50"
                             >
                                 Apply
+                            </button>
+
+                            <button
+                                onClick={handlePrintTagsSelected}
+                                disabled={selectedIds.size === 0}
+                                className="btn btn-soft px-3 py-2 text-xs"
+                                title="Print ID tags for selected items"
+                            >
+                                <TagIcon /> Print Selected Tags ({selectedIds.size})
                             </button>
 
                             <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-ink-400 transition-colors hover:text-ink-100 md:ml-2">
@@ -1029,6 +1188,13 @@ export default function AdminDashboard() {
                                     </div>
 
                                     <div className="mt-auto flex gap-2">
+                                        <button
+                                            onClick={() => handlePrintTag(item)}
+                                            title="Print ID tag"
+                                            className="icon-btn"
+                                        >
+                                            <TagIcon />
+                                        </button>
                                         <button
                                             onClick={() => handlePrint(item)}
                                             title="Print checklist"
@@ -1164,6 +1330,13 @@ export default function AdminDashboard() {
 
                                                     <td className="td">
                                                         <div className="flex items-center justify-center gap-1">
+                                                            <button
+                                                                onClick={() => handlePrintTag(item)}
+                                                                title="Print ID tag"
+                                                                className="icon-btn !p-1.5"
+                                                            >
+                                                                <TagIcon />
+                                                            </button>
                                                             <button
                                                                 onClick={() => handlePrint(item)}
                                                                 title="Print checklist"

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Equipment Fire Safety Tags</title>
+<style>
+    :root {
+        --color-apar: #ff1a1a;
+        --color-alarm: #4b9e11;
+        --color-emergency: #7b0081;
+        --color-exit: #d85c00;
+        --color-hydrant: #5b6cf0; /* Added Hydrant Color */
+    }
+
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        padding: 20px;
+        background-color: #f0f0f0;
+    }
+
+    /* Base Tag Structure */
+    .safety-tag {
+        width: 260px;
+        height: 360px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 15px;
+        box-sizing: border-box;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    /* Theme Colors */
+    .tag-apar { background-color: var(--color-apar); }
+    .tag-alarm { background-color: var(--color-alarm); }
+    .tag-emergency { background-color: var(--color-emergency); }
+    .tag-exit { background-color: var(--color-exit); }
+    .tag-hydrant { background-color: var(--color-hydrant); }
+
+    /* Header Text */
+    .tag-header {
+        text-align: center;
+        color: white;
+        margin-bottom: 12px;
+        width: 100%;
+    }
+    .tag-title {
+        font-size: 32px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 0.5px;
+        margin: 0;
+    }
+    .tag-id {
+        font-size: 38px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 0.5px;
+        margin: 0;
+    }
+
+    /* QR Code Container */
+    .qr-container {
+        width: 200px;
+        height: 200px;
+        background-color: white;
+        border: 8px solid black;
+        border-radius: 12px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 15px;
+        overflow: hidden;
+    }
+    
+    .qr-container img {
+        width: 90%;
+        height: 90%;
+        object-fit: contain;
+    }
+
+    /* Scan Me Button */
+    .scan-btn {
+        background-color: black;
+        color: white;
+        width: 90%;
+        height: 50px;
+        border-radius: 25px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .scan-text {
+        font-size: 22px;
+        font-weight: 500;
+        letter-spacing: 1px;
+    }
+
+    /* SVG Scan Icon */
+    .scan-icon {
+        width: 32px;
+        height: 32px;
+        background-color: white;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .scan-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Adjustments for longer titles */
+    .tag-title.long-text {
+        font-size: 26px;
+        margin-bottom: 2px;
+    }
+</style>
+</head>
+<body>
+
+    <!-- 5. HYDRANT Tag -->
+    <div class="safety-tag tag-hydrant">
+        <div class="tag-header">
+            <h1 class="tag-title">HYDRANT</h1>
+            <h2 class="tag-id">D1-001</h2>
+        </div>
+        <div class="qr-container">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HYDRANT-D1-001" alt="QR Code">
+        </div>
+        <div class="scan-btn">
+            <div class="scan-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7V4h3"></path><path d="M20 7V4h-3"></path>
+                    <path d="M4 17v3h3"></path><path d="M20 17v3h-3"></path>
+                    <rect x="7" y="7" width="10" height="10"></rect>
+                </svg>
+            </div>
+            <span class="scan-text">SCAN ME</span>
+        </div>
+    </div>
+
+</body>
+</html>
