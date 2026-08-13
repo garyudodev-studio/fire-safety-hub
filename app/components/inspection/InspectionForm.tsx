@@ -513,31 +513,33 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
             </div>
 
             {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Equipment ID (e.g. D3-001, B1-001) or location..."
-                className="input pl-10 pr-24 text-xs"
-              />
-              <svg
-                className="absolute left-3.5 top-3.5 w-4 h-4 text-ink-500"
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by Equipment ID (e.g. D3-001, B1-001) or location..."
+                  className="input pl-10 text-xs"
+                />
+                <svg
+                  className="absolute left-3.5 top-3.5 w-4 h-4 text-ink-500"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setQrError(null);
                   setShowQrScanner(true);
                 }}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-lg bg-ember-600/15 border border-ember-900/50 text-ember-400 px-3 py-2 text-xs font-semibold hover:bg-ember-600/25 transition-colors"
+                className="btn btn-primary shrink-0 px-4 py-2.5 text-xs flex items-center gap-2"
                 title="Scan the equipment ID tag QR code to auto-select"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
                   <path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
                 </svg>

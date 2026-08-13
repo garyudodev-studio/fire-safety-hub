@@ -202,28 +202,6 @@ export default function InspectionsPage() {
     });
   };
 
-  // Unique options for entity and facility
-  const uniqueEntities = useMemo(() => {
-    const set = new Set<string>();
-    inspections.forEach(i => {
-      const ent = i.equipment?.entity;
-      if (ent) set.add(ent);
-    });
-    return ['All', ...Array.from(set).sort()];
-  }, [inspections]);
-
-  const uniqueFacilities = useMemo(() => {
-    const set = new Set<string>();
-    inspections.forEach(i => {
-      const fac = i.equipment?.facility;
-      const ent = i.equipment?.entity;
-      if (fac && (selectedEntity === 'All' || ent === selectedEntity)) {
-        set.add(fac);
-      }
-    });
-    return ['All', ...Array.from(set).sort()];
-  }, [inspections, selectedEntity]);
-
   // Period options derived from inspection data
   const monthOptions = useMemo(() => {
     return Array.from(new Set(inspections.map((i) => i.month_year).filter(Boolean))).sort().reverse();
@@ -389,28 +367,6 @@ export default function InspectionsPage() {
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
                 </div>
-              </div>
-
-              <div className="flex-1 min-w-[120px]">
-                <label className="field-label text-[10px]">Entity</label>
-                <select
-                  value={selectedEntity}
-                  onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }}
-                  className="input text-xs"
-                >
-                  {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
-                </select>
-              </div>
-
-              <div className="flex-1 min-w-[120px]">
-                <label className="field-label text-[10px]">Facility</label>
-                <select
-                  value={selectedFacility}
-                  onChange={(e) => setSelectedFacility(e.target.value)}
-                  className="input text-xs"
-                >
-                  {uniqueFacilities.map(f => <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>)}
-                </select>
               </div>
 
               <div className="flex-1 min-w-[130px]">

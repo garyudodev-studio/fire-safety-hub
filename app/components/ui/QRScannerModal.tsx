@@ -12,14 +12,12 @@ interface QRScannerModalProps {
 export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipment QR Code' }: QRScannerModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const scanningRef = useRef(true);
 
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(true);
-  const [usingCamera, setUsingCamera] = useState(true);
   const [found, setFound] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
@@ -74,7 +72,6 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
     setFound(null);
     scanningRef.current = true;
     setIsScanning(true);
-    setUsingCamera(true);
 
     const attachStream = async (stream: MediaStream) => {
       streamRef.current = stream;
@@ -118,49 +115,6 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (e.target.value) e.target.value = '';
-    if (!file) return;
-    setUsingCamera(false);
-    setIsScanning(true);
-    setCameraError(null);
-    setFound(null);
-
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      try {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
-        if (code && code.data) {
-          handleDecoded(code.data);
-        } else {
-          setCameraError('No QR code detected in the uploaded image. Please try a clearer photo.');
-          setIsScanning(false);
-        }
-      } catch {
-        setCameraError('Failed to read the image. Please try again.');
-        setIsScanning(false);
-      } finally {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      setCameraError('Failed to load the image. Please try again.');
-      setIsScanning(false);
-    };
-    img.src = objectUrl;
-  };
-
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto p-4 md:p-6 bg-ink-950/80 backdrop-blur-md flex items-center justify-center animate-fade">
       <div className="relative w-full max-w-md bg-ink-900 border border-line rounded-3xl shadow-2xl p-6">
@@ -181,36 +135,30 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
         </div>
 
         {/* Video preview */}
-        {usingCamera ? (
-          <div className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-square flex items-center justify-center">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            {/* Scan frame overlay */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-3/5 aspect-square border-2 border-ember-400/80 rounded-xl" />
+        <div className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-square flex items-center justify-center">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+          {/* Scan frame overlay */}
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="w-3/5 aspect-square border-2 border-ember-400/80 rounded-xl" />
+          </div>
+          {isScanning && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs text-ink-200 bg-ink-950/70 backdrop-blur px-3 py-1.5 rounded-full whitespace-nowrap">
+              <span className="h-2 w-2 rounded-full bg-ember-500 animate-pulse" />
+              Scanning… point the camera at the QR code
             </div>
-            {isScanning && (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs text-ink-200 bg-ink-950/70 backdrop-blur px-3 py-1.5 rounded-full">
-                <span className="h-2 w-2 rounded-full bg-ember-500 animate-pulse" />
-                Scanning… point the camera at the QR code
-              </div>
-            )}
-            {found && (
-              <div className="absolute inset-0 bg-emerald-950/60 flex items-center justify-center">
-                <span className="text-emerald-400 font-bold text-sm">QR Code detected!</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-6 text-center text-sm text-ink-300">
-            Decoding uploaded QR image…
-          </div>
-        )}
+          )}
+          {found && (
+            <div className="absolute inset-0 bg-emerald-950/60 flex items-center justify-center">
+              <span className="text-emerald-400 font-bold text-sm">QR Code detected!</span>
+            </div>
+          )}
+        </div>
 
         {cameraError && (
           <div className="mt-4 rounded-xl border p-3 text-xs leading-relaxed tone-rose">
@@ -218,38 +166,19 @@ export default function QRScannerModal({ onScan, onClose, title = 'Scan Equipmen
           </div>
         )}
 
-        {/* Controls */}
-        <div className="mt-5 flex flex-col sm:flex-row gap-3">
+        {cameraError && (
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="btn btn-soft text-xs flex-1 py-2.5"
+            onClick={startCamera}
+            className="btn btn-ghost text-xs w-full mt-4 py-2.5"
           >
-            Upload QR Photo
+            Retry Camera
           </button>
-          {!usingCamera && (
-            <button
-              type="button"
-              onClick={startCamera}
-              className="btn btn-ghost text-xs flex-1 py-2.5"
-            >
-              Use Camera
-            </button>
-          )}
-        </div>
+        )}
+
         <p className="mt-3 text-[11px] text-ink-500 text-center">
           The QR code on the equipment ID tag points to its unique record. Scan it to auto-select the equipment.
         </p>
-
-        {/* Hidden file input for QR image upload fallback */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleFileChange}
-        />
 
         {/* Hidden canvas used for decoding */}
         <canvas ref={canvasRef} className="hidden" />

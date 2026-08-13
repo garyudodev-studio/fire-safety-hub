@@ -598,12 +598,6 @@ export default function ReportsPage() {
     setUninspPage(1);
     setReportPage(1);
   }
-  // Reset facility when entity changes
-  const [prevEntity, setPrevEntity] = useState(selectedEntity);
-  if (prevEntity !== selectedEntity) {
-    setPrevEntity(selectedEntity);
-    setSelectedFacility('All');
-  }
   // Reset week when month changes
   const [prevMonth, setPrevMonth] = useState(selectedMonth);
   if (prevMonth !== selectedMonth) {
@@ -1203,7 +1197,7 @@ export default function ReportsPage() {
 
               <div className="flex-1 min-w-[120px]">
                 <label className="field-label text-[10px]">Entity</label>
-                <select value={selectedEntity} onChange={(e) => setSelectedEntity(e.target.value)} className="input text-xs">
+                <select value={selectedEntity} onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }} className="input text-xs">
                   {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
                 </select>
               </div>

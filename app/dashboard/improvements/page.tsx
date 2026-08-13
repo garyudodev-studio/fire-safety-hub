@@ -48,6 +48,7 @@ export default function ImprovementsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedType, setSelectedType] = useState('ALL');
+  const [selectedEntity, setSelectedEntity] = useState('ALL');
   const [selectedFacility, setSelectedFacility] = useState('ALL');
 
   // Modal states
@@ -87,6 +88,20 @@ export default function ImprovementsPage() {
         .from('improvements')
         .select('*');
 
+      // Fetch the logged-in user's assigned entity/facility for auto-filtering
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role, entity, facility, pic:pic_id(entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileData) {
+        const assignedEntity = profileData.entity || profileData.pic?.entity;
+        const assignedFacility = profileData.facility || profileData.pic?.facility;
+        if (assignedEntity) setSelectedEntity(assignedEntity);
+        if (assignedFacility) setSelectedFacility(assignedFacility);
+      }
+
       const impMap = new Map<string, ImprovementRecord>();
       if (impData) {
         (impData as ImprovementRecord[]).forEach((imp) => {
@@ -114,6 +129,15 @@ export default function ImprovementsPage() {
   }, [supabase, router, reloadTrigger]);
 
   // Unique options for dropdowns
+  const uniqueEntities = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((r) => {
+      const ent = r.inspection.equipment?.entity;
+      if (ent) set.add(ent);
+    });
+    return ['ALL', ...Array.from(set).sort()];
+  }, [records]);
+
   const uniqueFacilities = useMemo(() => {
     const set = new Set<string>();
     records.forEach((r) => {
@@ -137,6 +161,7 @@ export default function ImprovementsPage() {
       const impStatus = r.improvement?.status || 'OPEN';
       const matchesStatus = selectedStatus === 'ALL' || impStatus === selectedStatus;
       const matchesType = selectedType === 'ALL' || r.inspection.equipment_type === selectedType;
+      const matchesEntity = selectedEntity === 'ALL' || r.inspection.equipment?.entity === selectedEntity;
       const matchesFacility = selectedFacility === 'ALL' || r.inspection.equipment?.facility === selectedFacility;
 
       const q = searchQuery.toLowerCase();
@@ -149,9 +174,9 @@ export default function ImprovementsPage() {
         (r.improvement?.action_taken && r.improvement.action_taken.toLowerCase().includes(q)) ||
         (r.inspection.remarks && r.inspection.remarks.toLowerCase().includes(q));
 
-      return matchesStatus && matchesType && matchesFacility && matchesSearch;
+      return matchesStatus && matchesType && matchesEntity && matchesFacility && matchesSearch;
     });
-  }, [records, selectedStatus, selectedType, selectedFacility, searchQuery]);
+  }, [records, selectedStatus, selectedType, selectedEntity, selectedFacility, searchQuery]);
 
   // Calculated KPIs
   const totalUnsafe = records.length;
@@ -228,6 +253,18 @@ export default function ImprovementsPage() {
               </button>
             ))}
           </div>
+
+          {/* Entity Filter */}
+          <select
+            value={selectedEntity}
+            onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('ALL'); }}
+            className="px-3 py-1.5 rounded-lg bg-ink-950 border border-line text-ink-200 focus:outline-none w-full sm:w-auto"
+          >
+            <option value="ALL">All Entities</option>
+            {uniqueEntities.filter((f) => f !== 'ALL').map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
 
           {/* Facility Filter */}
           <select
