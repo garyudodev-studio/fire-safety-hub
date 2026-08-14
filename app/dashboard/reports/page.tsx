@@ -8,6 +8,7 @@ import ImprovementModal, { ImprovementRecord } from '@/app/components/inspection
 import InspectionForm from '@/app/components/inspection/InspectionForm';
 import { printInspectionResults } from '@/app/lib/printInspectionResults';
 import { printResultReport } from '@/app/lib/printResultReport';
+import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 import { AlertModal, AlertState } from '@/app/components/ui/CustomModal';
 
@@ -29,6 +30,8 @@ interface EquipmentMaster {
   facility: string | null;
   area: string | null;
   location: string | null;
+  created_at?: string | null;
+  start_date?: string | null;
   pic_1?: EquipmentPic | null;
   pic_2?: EquipmentPic | null;
 }
@@ -456,7 +459,7 @@ export default function ReportsPage() {
         supabase
           .from('equipment')
           .select(`
-            id, no_id, type, entity, facility, area, location,
+            id, no_id, type, entity, facility, area, location, created_at, start_date,
             pic_1:pic_1_id(id, name, phone, image_profile, image_contact),
             pic_2:pic_2_id(id, name, phone, image_profile, image_contact)
           `),
@@ -518,14 +521,22 @@ export default function ReportsPage() {
   }, [inspections, searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // ── Apply same entity/facility/type filter to masterlist for coverage numbers ──
+  // Equipment that was added to the masterlist AFTER the selected period is excluded,
+  // so new equipment never inflates the "uninspected" count of past periods.
+  // With "All Weeks" active, the cut-off is the latest week that actually has inspection data,
+  // so equipment added after the last inspected week is not counted as uninspected.
+  const periodEndDate = useMemo(
+    () => getPeriodEndDate(selectedMonth, selectedWeek, weekOptions),
+    [selectedMonth, selectedWeek, weekOptions]
+  );
   const filteredMasterlist = useMemo(() => {
     return masterlist.filter((e) => {
       const matchType     = selectedType     === 'All' || e.type     === selectedType;
       const matchEntity   = selectedEntity   === 'All' || e.entity   === selectedEntity;
       const matchFacility = selectedFacility === 'All' || e.facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      return matchType && matchEntity && matchFacility && equipmentExistsInPeriod(e, periodEndDate);
     });
-  }, [masterlist, selectedType, selectedEntity, selectedFacility]);
+  }, [masterlist, selectedType, selectedEntity, selectedFacility, periodEndDate]);
 
   const unsafeRows = useMemo(() => filteredInspections.filter(i => i.status !== 'PASS'), [filteredInspections]);
   const safeRows   = useMemo(() => filteredInspections.filter(i => i.status === 'PASS'),  [filteredInspections]);

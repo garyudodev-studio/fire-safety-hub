@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 import type { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
@@ -23,6 +24,8 @@ interface EquipmentMaster {
   facility: string | null;
   area: string | null;
   location: string | null;
+  created_at?: string | null;
+  start_date?: string | null;
   pic_1?: PicPerson | null;
   pic_2?: PicPerson | null;
 }
@@ -519,7 +522,7 @@ function GuestReportsInner() {
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)'),
+          .select('id, no_id, type, entity, facility, area, location, created_at, start_date, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)'),
         supabase
           .from('improvements')
           .select('*')
@@ -563,14 +566,21 @@ function GuestReportsInner() {
   }, [inspections, searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // ── Apply same filters to masterlist for coverage ──
+  // Equipment added to the masterlist AFTER the selected period is excluded, so new
+  // equipment never inflates the "uninspected" count of past periods.
+  // With "All Weeks" active, the cut-off is the latest week that actually has inspection data.
+  const periodEndDate = useMemo(
+    () => getPeriodEndDate(selectedMonth, selectedWeek, weekOptions),
+    [selectedMonth, selectedWeek, weekOptions]
+  );
   const filteredMasterlist = useMemo(() => {
     return masterlist.filter((m) => {
       const matchType     = selectedType     === 'All' || m.type     === selectedType;
       const matchEntity   = selectedEntity   === 'All' || m.entity   === selectedEntity;
       const matchFacility = selectedFacility === 'All' || m.facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      return matchType && matchEntity && matchFacility && equipmentExistsInPeriod(m, periodEndDate);
     });
-  }, [masterlist, selectedType, selectedEntity, selectedFacility]);
+  }, [masterlist, selectedType, selectedEntity, selectedFacility, periodEndDate]);
 
   const unsafeRows = useMemo(() => filteredInspections.filter(i => i.status !== 'PASS'), [filteredInspections]);
   const safeRows   = useMemo(() => filteredInspections.filter(i => i.status === 'PASS'),  [filteredInspections]);

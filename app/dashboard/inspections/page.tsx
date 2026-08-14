@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { deleteStorageFiles } from '@/app/lib/storageHelpers';
+import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
 
 import InspectionForm from '@/app/components/inspection/InspectionForm';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
@@ -18,6 +19,8 @@ interface EquipmentMaster {
   facility: string | null;
   area: string | null;
   location: string | null;
+  created_at?: string | null;
+  start_date?: string | null;
 }
 
 function getTypeBadgeColor(type: string): string {
@@ -145,7 +148,7 @@ export default function InspectionsPage() {
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location'),
+          .select('id, no_id, type, entity, facility, area, location, created_at, start_date'),
         supabase
           .from('improvements')
           .select('*'),
@@ -262,14 +265,21 @@ export default function InspectionsPage() {
     : 100;
 
   // Coverage vs masterlist (same scope as reports page: type/entity/facility only)
+  // Equipment added to the masterlist AFTER the selected period is excluded, so new
+  // equipment never inflates the "uninspected" count of past periods.
+  // With "All Weeks" active, the cut-off is the latest week that actually has inspection data.
+  const periodEndDate = useMemo(
+    () => getPeriodEndDate(selectedMonth, selectedWeek, weekOptions),
+    [selectedMonth, selectedWeek, weekOptions]
+  );
   const filteredMasterlist = useMemo(() => {
     return masterlist.filter((e) => {
       const matchType = selectedType === 'All' || e.type === selectedType;
       const matchEntity = selectedEntity === 'All' || e.entity === selectedEntity;
       const matchFacility = selectedFacility === 'All' || e.facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      return matchType && matchEntity && matchFacility && equipmentExistsInPeriod(e, periodEndDate);
     });
-  }, [masterlist, selectedType, selectedEntity, selectedFacility]);
+  }, [masterlist, selectedType, selectedEntity, selectedFacility, periodEndDate]);
 
   const scopeInspections = useMemo(() => {
     return inspections.filter((item) => {
