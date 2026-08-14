@@ -258,12 +258,29 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
     setShowQrScanner(false);
     setQrError(null);
 
-    const value = scanned.trim();
+    let value = scanned.trim();
 
-    // Match by UUID (the ID tag QR encodes the equipment's unique id)
+    // Some scanners return the payload URL-encoded; normalize it first.
+    try {
+      const decoded = decodeURIComponent(value);
+      if (decoded !== value) value = decoded.trim();
+    } catch {
+      // keep original value if decoding fails
+    }
+
+    const lower = value.toLowerCase();
+
+    // Legacy ID tags encoded "{TYPE}-{no_id}" (e.g. "APAR-D1-001"), newer ones
+    // encode the equipment's UUID directly. no_id in the masterlist is just "D1-001".
+    const LEGACY_PREFIXES = ['apar', 'alarm', 'hydrant', 'emergency', 'exit'];
+
     const match =
       masterlist.find((e) => e.id === value) ||
-      masterlist.find((e) => e.no_id.toLowerCase() === value.toLowerCase());
+      masterlist.find((e) => e.no_id.toLowerCase() === lower) ||
+      masterlist.find((e) => {
+        const noId = e.no_id.toLowerCase();
+        return LEGACY_PREFIXES.some((p) => lower === `${p}-${noId}`) || lower.endsWith(`-${noId}`);
+      });
 
     if (match) {
       applyEquipmentSelection(match);

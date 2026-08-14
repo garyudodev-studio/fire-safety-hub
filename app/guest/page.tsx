@@ -5,7 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
+import InspectionChecklistModal from '@/app/components/inspection/InspectionChecklistModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
+import QRScannerModal from '@/app/components/ui/QRScannerModal';
 import type { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -457,6 +459,9 @@ function GuestReportsInner() {
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [viewingRecord, setViewingRecord] = useState<InspectionRecord | null>(null);
+  const [viewingChecklist, setViewingChecklist] = useState<InspectionRecord | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
 
   // Filters (initialized from URL query params)
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '');
@@ -543,6 +548,51 @@ function GuestReportsInner() {
 
     fetchData();
   }, [supabase, reloadTrigger]);
+
+  // ── QR code scan: resolve equipment and open its latest inspection ──
+  const handleQrScan = (scanned: string) => {
+    setShowQrScanner(false);
+    setQrError(null);
+
+    let value = scanned.trim();
+
+    // Some scanners return the payload URL-encoded; normalize it first.
+    try {
+      const decoded = decodeURIComponent(value);
+      if (decoded !== value) value = decoded.trim();
+    } catch {
+      // keep original value if decoding fails
+    }
+
+    const lower = value.toLowerCase();
+
+    // Legacy ID tags encoded "{TYPE}-{no_id}" (e.g. "APAR-D1-001"), newer ones
+    // encode the equipment's UUID directly. no_id in the masterlist is just "D1-001".
+    const LEGACY_PREFIXES = ['apar', 'alarm', 'hydrant', 'emergency', 'exit'];
+
+    const match =
+      masterlist.find((e) => e.id === value) ||
+      masterlist.find((e) => e.no_id.toLowerCase() === lower) ||
+      masterlist.find((e) => {
+        const noId = e.no_id.toLowerCase();
+        return LEGACY_PREFIXES.some((p) => lower === `${p}-${noId}`) || lower.endsWith(`-${noId}`);
+      });
+
+    if (!match) {
+      setQrError(`No equipment found for scanned code: "${value.slice(0, 50)}". Try again or search manually.`);
+      return;
+    }
+
+    // Show the latest inspection for this equipment in the filled checklist template
+    const latestInspection = inspections.find((i) => i.equipment_id === match.id);
+    if (latestInspection) {
+      setViewingChecklist(latestInspection);
+    } else {
+      setQrError(`No inspection recorded yet for "${match.no_id}". Shown below in the uninspected list.`);
+      setSearchQuery(match.no_id);
+      setActiveTab('uninspected');
+    }
+  };
 
   // ── Apply filters to inspections ──
   const filteredInspections = useMemo(() => {
@@ -1088,15 +1138,31 @@ function GuestReportsInner() {
 
             {/* Filter row 1: search, entity, facility, type */}
             <div className="flex flex-wrap items-end gap-3">
-              <div className="w-full sm:flex-1 sm:min-w-[140px]">
-                <label className="field-label text-[10px]">Search</label>
+            <div className="w-full sm:flex-1 sm:min-w-[140px]">
+              <label className="field-label text-[10px]">Search</label>
+              <div className="flex items-center gap-2">
                 <input
                   type="text" value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ID, inspector, type…"
-                  className="input text-xs"
+                  className="input text-xs flex-1"
                 />
+                <button
+                  type="button"
+                  onClick={() => { setQrError(null); setShowQrScanner(true); }}
+                  className="btn btn-primary shrink-0 px-3 py-2 text-xs flex items-center gap-1.5"
+                  title="Scan an equipment ID tag QR code to view its latest inspection result"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path d="M14 14h3v3h-3zM14 21h3M21 14h.01M21 21h.01" />
+                  </svg>
+                  Scan QR
+                </button>
               </div>
+            </div>
               <div className="w-full sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Entity</label>
                 <select value={selectedEntity} onChange={(e) => { const v = e.target.value; setSelectedEntity(v); if (v !== selectedEntity) setSelectedFacility('All'); }} className="input text-xs">
@@ -1154,6 +1220,18 @@ function GuestReportsInner() {
                 )}
               </div>
             </div>
+
+            {qrError && (
+              <div className="flex items-start gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                <svg className="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{qrError}</span>
+                <button onClick={() => setQrError(null)} className="ml-auto text-rose-400 hover:text-rose-700" title="Dismiss">✕</button>
+              </div>
+            )}
           </div>
 
           {/* ── KPI Cards ── */}
@@ -1301,6 +1379,18 @@ function GuestReportsInner() {
         onClose={() => setViewingRecord(null)}
         theme="light"
       />
+
+      <InspectionChecklistModal
+        inspection={viewingChecklist}
+        onClose={() => setViewingChecklist(null)}
+      />
+
+      {showQrScanner && (
+        <QRScannerModal
+          onScan={handleQrScan}
+          onClose={() => setShowQrScanner(false)}
+        />
+      )}
     </div>
   );
 }
