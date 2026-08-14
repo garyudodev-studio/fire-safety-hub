@@ -25,8 +25,8 @@ export interface InspectionRecord {
     area?: string;
     area_2?: string;
     entity?: string;
-    pic_1?: { id?: string; name?: string; image_profile?: string } | null;
-    pic_2?: { id?: string; name?: string; image_profile?: string } | null;
+    pic_1?: { id?: string; name?: string; phone?: string | null; image_profile?: string | null; image_contact?: string | null } | null;
+    pic_2?: { id?: string; name?: string; phone?: string | null; image_profile?: string | null; image_contact?: string | null } | null;
   } | null;
 }
 

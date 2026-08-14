@@ -15,7 +15,9 @@ import type { ImprovementRecord } from '@/app/components/inspection/ImprovementM
 interface PicPerson {
   id?: string;
   name?: string;
+  phone?: string | null;
   image_profile?: string | null;
+  image_contact?: string | null;
 }
 
 interface EquipmentMaster {
@@ -176,10 +178,10 @@ function KpiCard({
   color?: string; borderColor?: string;
 }) {
   return (
-    <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">{label}</span>
-      <span className={`text-4xl font-bold mt-1 ${color}`}>{value}</span>
-      {sub && <span className="text-xs text-stone-500 mt-0.5">{sub}</span>}
+    <div className={`panel p-4 sm:p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
+      <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-500">{label}</span>
+      <span className={`text-3xl sm:text-4xl font-bold mt-1 ${color}`}>{value}</span>
+      {sub && <span className="text-[11px] sm:text-xs text-stone-500 mt-0.5">{sub}</span>}
     </div>
   );
 }
@@ -190,10 +192,10 @@ function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: numbe
   const dash = (rate / 100) * circ;
   const color = rate >= 80 ? '#10b981' : rate >= 50 ? '#d97706' : '#dc2626';
   return (
-    <div className="panel p-5 flex flex-col items-center justify-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">Health Score</span>
+    <div className="panel p-4 sm:p-5 flex flex-col items-center justify-center gap-2">
+      <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-500">Health Score</span>
       <div className="relative flex items-center justify-center">
-        <svg width="96" height="96" viewBox="0 0 96 96">
+        <svg width="80" height="80" viewBox="0 0 96 96" className="sm:hidden">
           <circle cx="48" cy="48" r={r} fill="none" stroke="#e7e5e4" strokeWidth="8" />
           <circle
             cx="48" cy="48" r={r}
@@ -204,9 +206,20 @@ function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: numbe
             style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
           />
         </svg>
-        <span className="absolute text-xl font-bold" style={{ color }}>{rate}%</span>
+        <svg width="96" height="96" viewBox="0 0 96 96" className="hidden sm:block">
+          <circle cx="48" cy="48" r={r} fill="none" stroke="#e7e5e4" strokeWidth="8" />
+          <circle
+            cx="48" cy="48" r={r}
+            fill="none" stroke={color} strokeWidth="8"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            transform="rotate(-90 48 48)"
+            style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
+          />
+        </svg>
+        <span className="absolute text-lg sm:text-xl font-bold" style={{ color }}>{rate}%</span>
       </div>
-      <span className="text-xs text-stone-500">
+      <span className="text-[11px] sm:text-xs text-stone-500 text-center">
         {addressed > 0 ? `${addressed} resolved or in progress via CAPA` : 'Pass rate + CAPA'}
       </span>
     </div>
@@ -523,11 +536,11 @@ function GuestReportsInner() {
       const [inspRes, masterRes, impRes] = await Promise.all([
         supabase
           .from('inspections')
-          .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile))`)
+          .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact))`)
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location, created_at, start_date, pic_1:pic_1_id(id, name, image_profile), pic_2:pic_2_id(id, name, image_profile)'),
+          .select('id, no_id, type, entity, facility, area, location, created_at, start_date, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact)'),
         supabase
           .from('improvements')
           .select('*')
@@ -952,16 +965,16 @@ function GuestReportsInner() {
           <>
             {/* ── Report header: logo + entity/facility + period ── */}
             <div className="border-b border-stone-200 bg-stone-50/60 px-5 py-4">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/logoyj.jpeg"
                   alt="Company logo"
-                  className="h-14 w-14 rounded-xl border border-stone-200 bg-white object-contain p-1 shrink-0"
+                  className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border border-stone-200 bg-white object-contain p-1 shrink-0"
                   draggable={false}
                 />
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-bold tracking-tight text-stone-900">Inspection Result Report</h3>
+                  <h3 className="text-base sm:text-lg font-bold tracking-tight text-stone-900">Inspection Result Report</h3>
                   <p className="text-xs text-stone-500 mt-0.5">
                     <span className="font-semibold text-red-800">{entityLabel}</span>
                     <span className="text-stone-400 mx-1.5">·</span>
@@ -972,7 +985,7 @@ function GuestReportsInner() {
                     <span className="text-stone-700">{totalInspections}</span> inspection results
                   </p>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 shrink-0">
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                     healthScore >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
@@ -990,7 +1003,7 @@ function GuestReportsInner() {
 
             {/* ── Report table with inspection photos ── */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="mobile-cards w-full text-left">
                 <thead>
                   <tr className={`border-b ${TAB_SCHEME.report.border} ${TAB_SCHEME.report.headerBg}`}>
                     <th className="th">Photo</th>
@@ -1015,7 +1028,7 @@ function GuestReportsInner() {
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer ${isPass ? 'hover:bg-emerald-50/50' : 'hover:bg-rose-50/50'}`}
                       >
-                        <td className="td">
+                        <td data-label="Photo" className="td">
                           {photos.length > 0 ? (
                             <ProtectedImage
                               src={photos[0]}
@@ -1033,25 +1046,25 @@ function GuestReportsInner() {
                             </span>
                           )}
                         </td>
-                        <td className={`td font-bold ${isPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        <td data-label="Equipment ID" className={`td font-bold ${isPass ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {item.equipment_no_id}
                         </td>
-                        <td className="td">
+                        <td data-label="Type" className="td">
                           <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
                             {item.equipment_type}
                           </span>
                         </td>
-                        <td className="td text-xs">
+                        <td data-label="Entity / Facility" className="td text-xs">
                           {entity && <div className="text-stone-800 font-medium truncate">{entity}</div>}
                           {facility && <div className="text-stone-500 text-[11px] truncate">{facility}</div>}
                           {!entity && !facility && <span className="text-stone-400 italic">—</span>}
                         </td>
-                        <td className="td text-xs text-stone-600">
+                        <td data-label="Date / Period" className="td text-xs text-stone-600">
                           <div className="truncate">{item.inspection_date}</div>
                           <div className="text-stone-400 text-[11px] truncate">{item.week} ({item.month_year})</div>
                         </td>
-                        <td className="td text-xs text-stone-700">{item.inspector_name}</td>
-                        <td className="td">
+                        <td data-label="Inspector" className="td text-xs text-stone-700">{item.inspector_name}</td>
+                        <td data-label="Status" className="td">
                           {(() => {
                             const improvement = improvementsMap.get(item.id);
                             const shownAsCapa = !isPass && !!improvement;
@@ -1079,7 +1092,7 @@ function GuestReportsInner() {
                             );
                           })()}
                         </td>
-                        <td className="td text-xs text-stone-500 max-w-[200px] truncate">
+                        <td data-label="Remarks" className="td text-xs text-stone-500">
                           {item.remarks || <span className="italic text-stone-400">No remarks</span>}
                         </td>
                       </tr>
@@ -1286,10 +1299,10 @@ function GuestReportsInner() {
 
           {/* ── Tabbed Panel ── */}
           <div className="panel overflow-hidden p-0">
-            <div className="flex flex-wrap border-b border-stone-200 bg-stone-50/60">
+            <div className="flex overflow-x-auto border-b border-stone-200 bg-stone-50/60">
               <button
                 onClick={() => setActiveTab('uninspected')}
-                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'uninspected' ? 'border-amber-500 text-amber-700' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
@@ -1304,7 +1317,7 @@ function GuestReportsInner() {
 
               <button
                 onClick={() => setActiveTab('unsafe')}
-                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'unsafe' ? 'border-rose-500 text-rose-600' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
@@ -1320,7 +1333,7 @@ function GuestReportsInner() {
 
               <button
                 onClick={() => setActiveTab('safe')}
-                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'safe' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >
@@ -1335,7 +1348,7 @@ function GuestReportsInner() {
 
               <button
                 onClick={() => setActiveTab('report')}
-                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'report' ? 'border-sky-500 text-sky-700' : 'border-transparent text-stone-400 hover:text-stone-600'
                 }`}
               >

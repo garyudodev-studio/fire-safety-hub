@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { buildInspectionPrintPages } from '@/app/lib/printInspectionResults';
 import type { InspectionRecord } from './InspectionDetailModal';
@@ -13,6 +13,7 @@ interface InspectionChecklistModalProps {
 export default function InspectionChecklistModal({ inspection, onClose }: InspectionChecklistModalProps) {
   const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (!inspection) return;
@@ -31,7 +32,16 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
 
         const { html: bodyHtml, header } = await buildInspectionPrintPages([inspection], sigs);
         if (!cancelled) {
-          setHtml(`${header}${bodyHtml}</body></html>`);
+          // Mobile fallback: scale the fixed-width (210mm) A4 page to fit small screens.
+          const mobileStyle = `
+<style>
+  @media (max-width: 767px) {
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    body { zoom: 0.48; }
+    .a4-container { box-shadow: none !important; margin: 0 auto !important; }
+  }
+</style>`;
+          setHtml(`${header.replace('</head>', mobileStyle)}${bodyHtml}</body></html>`);
         }
       } catch (err) {
         if (!cancelled) {
@@ -43,6 +53,19 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
     load();
     return () => { cancelled = true; };
   }, [inspection]);
+
+  // Scale the A4 page precisely to the iframe width on any screen size.
+  const handleIframeLoad = () => {
+    const frame = iframeRef.current;
+    const doc = frame?.contentDocument;
+    if (!frame || !doc || !doc.body) return;
+    // 210mm A4 width ≈ 793.7px at 96dpi
+    const nativeWidth = 793.7;
+    const scale = Math.min(1, frame.clientWidth / nativeWidth);
+    if (scale >= 1) return;
+    doc.body.style.zoom = String(scale);
+    doc.body.style.width = '100%';
+  };
 
   if (!inspection) return null;
 
@@ -72,22 +95,22 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
     <div className="fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 bg-stone-900/30 backdrop-blur-[2px] flex justify-center items-start animate-fade">
       <div className="relative w-full max-w-4xl bg-white border border-stone-200 rounded-3xl shadow-2xl shadow-stone-900/10 overflow-hidden max-h-[90vh] flex flex-col my-auto sm:my-8">
         {/* Header */}
-        <div className="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between shrink-0 gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="p-4 sm:p-5 border-b border-stone-200 bg-stone-50 flex flex-wrap items-center justify-between shrink-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <span className="text-base font-bold text-stone-900 truncate">{inspection.equipment_no_id}</span>
-            <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${
+            <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium whitespace-nowrap ${
               isPass
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-rose-50 text-rose-700 border-rose-200'
             }`}>
               {isPass ? '✓ PASS' : '⚠️ NEEDS ATTENTION'}
             </span>
-            <span className="text-xs text-stone-500 hidden sm:block truncate">
-              {inspection.week} ({inspection.month_year}) · {inspection.inspection_date}
-            </span>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] text-stone-500 truncate sm:hidden">
+              {inspection.week} ({inspection.month_year})
+            </span>
             <button
               onClick={handlePrint}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-800 text-white hover:bg-red-900 transition-colors flex items-center gap-1.5"
@@ -118,8 +141,10 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
             <div className="py-16 text-center text-sm text-rose-600">{error}</div>
           ) : html ? (
             <iframe
+              ref={iframeRef}
               srcDoc={html}
               title={`Checklist for ${inspection.equipment_no_id}`}
+              onLoad={handleIframeLoad}
               className="w-full h-full min-h-[70vh] bg-white border border-stone-200 rounded-xl"
             />
           ) : (
