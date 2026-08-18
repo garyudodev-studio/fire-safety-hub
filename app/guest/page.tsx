@@ -679,8 +679,10 @@ function GuestReportsInner() {
   const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
 
   // ── Coverage / "Not inspected" ──
-  // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
-  // month/week, so inspecting one period never makes other periods' equipment look "uninspected").
+  // Inspected scope matches the masterlist scope (type/entity/facility) PLUS the selected
+  // period (month/week), so "inspected" only counts equipment that was inspected during the
+  // selected week. This keeps the "not inspected" count accurate per week without mutating
+  // or affecting any previously saved inspection/report data.
   const scopeInspections = useMemo(() => {
     return inspections.filter((item) => {
       const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
@@ -688,9 +690,11 @@ function GuestReportsInner() {
       const facility      = item.equipment?.facility ?? '';
       const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      const matchMonth    = !selectedMonth   || item.month_year === selectedMonth;
+      const matchWeek     = !selectedWeek    || item.week === selectedWeek;
+      return matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
-  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+  }, [inspections, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // Match by the real equipment primary key (robust vs no_id string/whitespace mismatches).
   const inspectedEquipmentIds = useMemo(

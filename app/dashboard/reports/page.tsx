@@ -565,8 +565,10 @@ export default function ReportsPage() {
     : 100;
 
   // Coverage KPI
-  // Inspected scope matches the masterlist scope (type/entity/facility only — NOT search or
-  // month/week, so inspecting one period never makes other periods' equipment look "uninspected").
+  // Inspected scope matches the masterlist scope (type/entity/facility) PLUS the selected
+  // period (month/week), so "inspected" only counts equipment that was inspected during the
+  // selected week. This keeps the "not inspected" count accurate per week without mutating
+  // or affecting any previously saved inspection/report data.
   const scopeInspections = useMemo(() => {
     return inspections.filter((item) => {
       const matchType     = selectedType     === 'All' || item.equipment_type === selectedType;
@@ -574,9 +576,11 @@ export default function ReportsPage() {
       const facility      = item.equipment?.facility ?? '';
       const matchEntity   = selectedEntity   === 'All' || entity   === selectedEntity;
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      const matchMonth    = !selectedMonth   || item.month_year === selectedMonth;
+      const matchWeek     = !selectedWeek    || item.week === selectedWeek;
+      return matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
-  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+  }, [inspections, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   // Match by the real equipment primary key (robust vs no_id string/whitespace mismatches).
   const inspectedEquipmentIds = useMemo(
@@ -1079,10 +1083,10 @@ export default function ReportsPage() {
                         <td data-label="Status" className="td">
                           {(() => {
                             const improvement = improvementsMap.get(item.id);
-                            const shownAsCapa = !isPass && !!improvement;
-                            if (shownAsCapa) {
-                              const capaResolved = improvement.status === 'RESOLVED';
-                              const capaInProgress = improvement.status === 'IN_PROGRESS';
+                            if (!isPass) {
+                              const capaStatus = improvement?.status || 'OPEN';
+                              const capaResolved = capaStatus === 'RESOLVED';
+                              const capaInProgress = capaStatus === 'IN_PROGRESS';
                               return (
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
                                   capaResolved ? 'tone-emerald' : capaInProgress ? 'tone-amber' : 'tone-rose'
@@ -1101,25 +1105,16 @@ export default function ReportsPage() {
                                       <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                                     </svg>
                                   )}
-                                  {capaResolved ? 'RESOLVED' : capaInProgress ? 'IN PROGRESS' : 'OPEN'}
+                                  {capaStatus}
                                 </span>
                               );
                             }
                             return (
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                                isPass ? 'tone-emerald' : 'tone-rose'
-                              }`}>
-                                {isPass ? (
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <polyline points="20 6 9 17 4 12" />
-                                  </svg>
-                                ) : (
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                                  </svg>
-                                )}
-                                {isPass ? 'PASS' : 'NEEDS ATTENTION'}
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border tone-emerald">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                PASS
                               </span>
                             );
                           })()}

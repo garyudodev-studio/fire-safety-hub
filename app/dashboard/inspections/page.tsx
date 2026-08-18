@@ -264,10 +264,11 @@ export default function InspectionsPage() {
     ? Math.round(((safeCount + resolvedCount + inProgressCount) / totalInspections) * 100)
     : 100;
 
-  // Coverage vs masterlist (same scope as reports page: type/entity/facility only)
-  // Equipment added to the masterlist AFTER the selected period is excluded, so new
-  // equipment never inflates the "uninspected" count of past periods.
-  // With "All Weeks" active, the cut-off is the latest week that actually has inspection data.
+  // Coverage vs masterlist (same scope as reports page: type/entity/facility + selected
+  // month/week). "Inspected" only counts equipment inspected during the selected week, so
+  // the "Not Inspected" KPI is accurate per week. Equipment added to the masterlist AFTER the
+  // selected period is excluded via equipmentExistsInPeriod, so new equipment never inflates
+  // the "uninspected" count of past periods. Previous inspections/reports are never mutated.
   const periodEndDate = useMemo(
     () => getPeriodEndDate(selectedMonth, selectedWeek, weekOptions),
     [selectedMonth, selectedWeek, weekOptions]
@@ -288,9 +289,11 @@ export default function InspectionsPage() {
       const facility = item.equipment?.facility ?? '';
       const matchEntity = selectedEntity === 'All' || entity === selectedEntity;
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
-      return matchType && matchEntity && matchFacility;
+      const matchMonth = !selectedMonth || item.month_year === selectedMonth;
+      const matchWeek  = !selectedWeek  || item.week === selectedWeek;
+      return matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
-  }, [inspections, selectedType, selectedEntity, selectedFacility]);
+  }, [inspections, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
   const inspectedEquipmentIds = useMemo(
     () => new Set(scopeInspections.map((i) => i.equipment_id)),

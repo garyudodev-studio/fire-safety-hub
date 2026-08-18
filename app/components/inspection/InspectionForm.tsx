@@ -73,6 +73,11 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
   const [duplicate, setDuplicate] = useState<{ inspector: string; date: string } | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 
+  // All inspections (read-only) used to show weekly coverage vs the masterlist.
+  const [weekInspections, setWeekInspections] = useState<
+    { id: string; equipment_id: string; month_year: string; week: string }[]
+  >([]);
+
   const supabase = getSupabaseClient();
 
   // Scroll to top of modal container whenever component mounts or selected equipment changes
@@ -108,6 +113,14 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
 
       if (picsData) {
         setPicList(picsData as PicItem[]);
+      }
+
+      // Fetch inspections (read-only) for weekly coverage display against the masterlist
+      const { data: inspData } = await supabase
+        .from('inspections')
+        .select('id, equipment_id, month_year, week');
+      if (inspData) {
+        setWeekInspections(inspData as { id: string; equipment_id: string; month_year: string; week: string }[]);
       }
 
       // Fetch current user role and pic
@@ -201,6 +214,22 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
   const uniqueTypes = Array.from(
     new Set(masterlist.map((e) => e.type).filter(Boolean))
   ).sort();
+
+  // Weekly coverage vs the masterlist — read-only calculation, never mutates data.
+  const inspectedThisWeek = new Set(
+    weekInspections
+      .filter((i) => i.month_year === monthYear && i.week === week)
+      .map((i) => i.equipment_id)
+  );
+  const coverageEquipment = masterlist.filter((item) => {
+    const matchesFacility = selectedFacility === 'All' || item.facility === selectedFacility;
+    const matchesType = selectedTypeFilter === 'All' || item.type === selectedTypeFilter;
+    return matchesFacility && matchesType;
+  });
+  const totalCoverage = coverageEquipment.length;
+  const inspectedCoverage = coverageEquipment.filter((e) => inspectedThisWeek.has(e.id)).length;
+  const remainingCoverage = Math.max(0, totalCoverage - inspectedCoverage);
+  const coveragePct = totalCoverage > 0 ? Math.round((inspectedCoverage / totalCoverage) * 100) : 0;
 
   const applyEquipmentSelection = (item: EquipmentItem | null) => {
     setSelectedEquipment(item);
@@ -474,6 +503,43 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
           </div>
         </div>
       )}
+
+      {/* Weekly coverage progress vs the masterlist */}
+      <div className="panel p-5 flex flex-col md:flex-row md:items-center gap-4 border-ember-900/40">
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-ember-600/15 text-ember-400 border border-ember-900/50">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </span>
+          <div>
+            <p className="text-xs font-bold text-ink-100">Weekly Inspection Coverage</p>
+            <p className="text-[11px] text-ink-500">
+              {monthYear ? `${monthYear} · ${week}` : 'Auto-calculated from the inspection date'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0 w-full">
+          <div className="flex items-center justify-between text-xs text-ink-300 mb-1.5 gap-3">
+            <span>
+              <strong className="text-ink-100">{inspectedCoverage}</strong> / {totalCoverage} masterlist equipment inspected
+            </span>
+            <span className={`font-semibold shrink-0 ${remainingCoverage > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {remainingCoverage > 0 ? `${remainingCoverage} remaining this week` : '✓ Week complete'}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-ink-800 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${remainingCoverage > 0 ? 'bg-ember-500' : 'bg-emerald-500'}`}
+              style={{ width: `${coveragePct}%` }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Step 1: Filter & Select Masterlist Equipment */}
       <div className="panel p-6 space-y-4">
