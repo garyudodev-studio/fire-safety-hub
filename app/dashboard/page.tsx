@@ -6,6 +6,7 @@ import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { printMasterlist } from '@/app/lib/printMasterlist';
 import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/components/ui/CustomModal';
 import ImageModal from '@/app/components/ui/ImageModal';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
@@ -767,6 +768,42 @@ export default function AdminDashboard() {
         XLSX.writeFile(workbook, 'equipment_export.xlsx');
     };
 
+    const handlePrintMasterlist = async () => {
+        if (filteredEquipment.length === 0) return;
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            let preparedBy = '';
+            let preparedByTitle = 'Safety Officer / HSE Dept.';
+            let signatureUrl: string | null = null;
+
+            if (session?.user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role, entity, facility, pic:pic_id(name, signature_url, entity, facility)')
+                    .eq('id', session.user.id)
+                    .single();
+                if (profile) {
+                    preparedBy = profile.pic?.name || 'Prepared & Approved By';
+                    signatureUrl = profile.pic?.signature_url || null;
+                    const titleRole = profile.role === 'admin' ? 'Administrator / HSE Dept.' : 'Safety Inspector / HSE Dept.';
+                    const scope = [profile.entity || profile.pic?.entity, profile.facility || profile.pic?.facility].filter(Boolean).join(' · ');
+                    preparedByTitle = [titleRole, scope].filter(Boolean).join(' — ');
+                }
+            }
+
+            await printMasterlist({
+                records: filteredEquipment,
+                entity: filterEntity || 'All Entities',
+                facility: filterFacility || 'All Facilities',
+                preparedBy,
+                preparedByTitle,
+                signatureUrl,
+            });
+        } catch (err) {
+            setAlertModal({ isOpen: true, title: 'Print Error', message: err instanceof Error ? err.message : 'Failed to generate printable masterlist.', type: 'error' });
+        }
+    };
+
     const toggleSelect = (id: string) => {
         const newSet = new Set(selectedIds);
         if (newSet.has(id)) newSet.delete(id);
@@ -948,6 +985,9 @@ export default function AdminDashboard() {
                         </Link>
                         <button onClick={handleExport} className="btn btn-soft">
                             <ExportIcon /> Export
+                        </button>
+                        <button onClick={handlePrintMasterlist} disabled={filteredEquipment.length === 0} className="btn btn-soft disabled:opacity-50" title="Print professional masterlist report (A4 landscape)">
+                            <PrintIcon /> Print Masterlist
                         </button>
                         <button onClick={handlePrintTagsAll} className="btn btn-soft" title="Print ID tags for all equipment">
                             <TagIcon /> Print All Tags
