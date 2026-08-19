@@ -10,6 +10,15 @@ import InspectionForm from '@/app/components/inspection/InspectionForm';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 import type { ImprovementRecord } from '@/app/components/inspection/ImprovementModal';
 import { ConfirmModal, AlertModal, ConfirmState, AlertState } from '@/app/components/ui/CustomModal';
+import ProtectedImage from '@/app/components/ui/ProtectedImage';
+
+interface PicPerson {
+  id?: string;
+  name?: string | null;
+  phone?: string | null;
+  image_profile?: string | null;
+  image_contact?: string | null;
+}
 
 interface EquipmentMaster {
   id: string;
@@ -21,6 +30,8 @@ interface EquipmentMaster {
   location: string | null;
   created_at?: string | null;
   start_date?: string | null;
+  pic_1?: PicPerson | null;
+  pic_2?: PicPerson | null;
 }
 
 function getTypeBadgeColor(type: string): string {
@@ -101,6 +112,76 @@ function PassRateRing({ rate, addressed = 0 }: { rate: number; addressed?: numbe
   );
 }
 
+// PIC cell: profile image icon + name (falls back to initial avatar)
+function PicCell({ pic, accent }: { pic?: PicPerson | null; accent: string }) {
+  if (!pic?.name) {
+    return <span className="text-[11px] italic text-ink-600">—</span>;
+  }
+  return (
+    <div className="flex items-center gap-2 min-w-0" title={pic.name}>
+      {pic.image_profile ? (
+        <ProtectedImage
+          src={pic.image_profile}
+          alt=""
+          className="h-6 w-6 flex-shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border ${accent} text-[10px] font-bold`}>
+          {pic.name[0].toUpperCase()}
+        </span>
+      )}
+      <span className="truncate text-xs text-ink-200">{pic.name}</span>
+    </div>
+  );
+}
+
+const PAGE_SIZE = 13;
+
+function Pagination({
+  total, page, pageSize, onChange,
+}: {
+  total: number; page: number; pageSize: number; onChange: (p: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (totalPages <= 1) return null;
+
+  const pages: (number | '…')[] = [];
+  const win = 2;
+  const lo = Math.max(1, page - win);
+  const hi = Math.min(totalPages, page + win);
+  if (lo > 1) { pages.push(1); if (lo > 2) pages.push('…'); }
+  for (let i = lo; i <= hi; i++) pages.push(i);
+  if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
+
+  return (
+    <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 border-t border-line bg-ink-950/40 sm:flex-row">
+      <span className="text-xs text-ink-500">
+        {total === 0 ? '0 results' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+      </span>
+      <div className="flex flex-wrap items-center justify-center gap-1">
+        <button onClick={() => onChange(page - 1)} disabled={page <= 1}
+          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          ‹ Prev
+        </button>
+        {pages.map((p, idx) =>
+          p === '…' ? (
+            <span key={`e${idx}`} className="px-1.5 text-ink-600 text-xs">…</span>
+          ) : (
+            <button key={p} onClick={() => onChange(p as number)}
+              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p === page ? 'bg-ember-600 text-white' : 'text-ink-400 hover:bg-ink-800'}`}>
+              {p}
+            </button>
+          )
+        )}
+        <button onClick={() => onChange(page + 1)} disabled={page >= totalPages}
+          className="px-2.5 py-1.5 rounded-lg text-xs text-ink-400 hover:bg-ink-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          Next ›
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function InspectionsPage() {
   const router = useRouter();
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
@@ -124,6 +205,9 @@ export default function InspectionsPage() {
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const [masterlist, setMasterlist] = useState<EquipmentMaster[]>([]);
   const [improvementsMap, setImprovementsMap] = useState<Map<string, ImprovementRecord>>(new Map());
+  const [activeTab, setActiveTab] = useState<'logs' | 'uninspected'>('logs');
+  const [uninspPage, setUninspPage] = useState(1);
+  const [userPicId, setUserPicId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -136,7 +220,7 @@ export default function InspectionsPage() {
       const [profileRes, inspRes, masterRes, impRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('role, entity, facility, pic:pic_id(entity, facility)')
+          .select('role, entity, facility, pic_id, pic:pic_id(id, name, entity, facility)')
           .eq('id', sessionData.session.user.id)
           .single(),
         supabase
@@ -148,7 +232,11 @@ export default function InspectionsPage() {
           .order('created_at', { ascending: false }),
         supabase
           .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location, created_at, start_date'),
+          .select(`
+            id, no_id, type, entity, facility, area, location, created_at, start_date,
+            pic_1:pic_1_id(id, name, phone, image_profile, image_contact),
+            pic_2:pic_2_id(id, name, phone, image_profile, image_contact)
+          `),
         supabase
           .from('improvements')
           .select('*'),
@@ -157,10 +245,15 @@ export default function InspectionsPage() {
       if (profileRes.data) {
         const userProfile = profileRes.data;
         if (userProfile.role) setUserRole(userProfile.role);
-        const assignedEntity = userProfile.entity || userProfile.pic?.entity;
-        const assignedFacility = userProfile.facility || userProfile.pic?.facility;
-        if (assignedEntity) setSelectedEntity(assignedEntity);
-        if (assignedFacility) setSelectedFacility(assignedFacility);
+        setUserPicId(userProfile.pic_id ?? userProfile.pic?.id ?? null);
+        // Non-admin (PIC / inspector) is auto-scoped to their assigned entity/facility.
+        // Admin always sees the full masterlist across all entities/facilities.
+        if (userProfile.role !== 'admin') {
+          const assignedEntity = userProfile.entity || userProfile.pic?.entity;
+          const assignedFacility = userProfile.facility || userProfile.pic?.facility;
+          if (assignedEntity) setSelectedEntity(assignedEntity);
+          if (assignedFacility) setSelectedFacility(assignedFacility);
+        }
       }
 
       if (!inspRes.error && inspRes.data) {
@@ -273,14 +366,26 @@ export default function InspectionsPage() {
     () => getPeriodEndDate(selectedMonth, selectedWeek, weekOptions),
     [selectedMonth, selectedWeek, weekOptions]
   );
+  // Equipment assigned to the logged-in user as PIC 1 or PIC 2 (admin sees all).
+  const isAdmin = userRole === 'admin';
+  const userAssignedEquipmentIds = useMemo(() => {
+    if (isAdmin || !userPicId) return null;
+    return new Set(
+      masterlist
+        .filter((e) => e.pic_1?.id === userPicId || e.pic_2?.id === userPicId)
+        .map((e) => e.id)
+    );
+  }, [masterlist, userPicId, isAdmin]);
+
   const filteredMasterlist = useMemo(() => {
     return masterlist.filter((e) => {
       const matchType = selectedType === 'All' || e.type === selectedType;
       const matchEntity = selectedEntity === 'All' || e.entity === selectedEntity;
       const matchFacility = selectedFacility === 'All' || e.facility === selectedFacility;
-      return matchType && matchEntity && matchFacility && equipmentExistsInPeriod(e, periodEndDate);
+      const matchPic = !userAssignedEquipmentIds || userAssignedEquipmentIds.has(e.id);
+      return matchType && matchEntity && matchFacility && matchPic && equipmentExistsInPeriod(e, periodEndDate);
     });
-  }, [masterlist, selectedType, selectedEntity, selectedFacility, periodEndDate]);
+  }, [masterlist, selectedType, selectedEntity, selectedFacility, periodEndDate, userAssignedEquipmentIds]);
 
   const scopeInspections = useMemo(() => {
     return inspections.filter((item) => {
@@ -306,6 +411,18 @@ export default function InspectionsPage() {
   );
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
 
+  // ★ Uninspected equipment list from the masterlist (with related PIC auto-integrated)
+  const uninspectedRows = useMemo(() => {
+    return filteredMasterlist
+      .filter((e) => !inspectedEquipmentIds.has(e.id))
+      .sort((a, b) => a.no_id.localeCompare(b.no_id));
+  }, [filteredMasterlist, inspectedEquipmentIds]);
+
+  const uninspSlice = useMemo(
+    () => uninspectedRows.slice((uninspPage - 1) * PAGE_SIZE, uninspPage * PAGE_SIZE),
+    [uninspectedRows, uninspPage]
+  );
+
   // Data is only shown once the user picks a period filter (month/week).
   const hasPeriodFilter = selectedMonth !== '' || selectedWeek !== '';
 
@@ -325,6 +442,14 @@ export default function InspectionsPage() {
     setSelectedMonth('');
     setSelectedWeek('');
   };
+
+  // Reset uninspected pagination when filters change
+  const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
+  const [prevFilterSignature, setPrevFilterSignature] = useState(filterSignature);
+  if (prevFilterSignature !== filterSignature) {
+    setPrevFilterSignature(filterSignature);
+    setUninspPage(1);
+  }
 
   return (
     <>
@@ -507,6 +632,42 @@ export default function InspectionsPage() {
             {!hasPeriodFilter ? (
               <FilterRequired scope="inspection logs" />
             ) : (
+            <>
+              {/* Tabs */}
+              <div className="flex overflow-x-auto border-b border-line bg-ink-950/40">
+                <button
+                  onClick={() => setActiveTab('logs')}
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
+                    activeTab === 'logs' ? 'border-ember-500 text-ember-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+                  }`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  Inspection Logs
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${activeTab === 'logs' ? 'bg-ember-500/15 text-ember-300 border-ember-500/30' : 'bg-ink-800 text-ink-300 border-transparent'}`}>
+                    {totalInspections}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('uninspected')}
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-3.5 text-xs sm:text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${
+                    activeTab === 'uninspected' ? 'border-amber-500 text-amber-300' : 'border-transparent text-ink-400 hover:text-ink-100'
+                  }`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  Uninspected Equipment
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${activeTab === 'uninspected' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-ink-800 text-ink-300 border-transparent'}`}>
+                    {notInspectedCount}
+                  </span>
+                </button>
+              </div>
+
+            {activeTab === 'logs' ? (
             <div className="overflow-x-auto">
               <table className="mobile-cards w-full text-left">
                 <thead>
@@ -646,6 +807,97 @@ export default function InspectionsPage() {
                 </tbody>
               </table>
             </div>
+            ) : (
+            <>
+            {!isAdmin && userPicId && (
+              <div className="px-4 py-2.5 border-b border-amber-200 bg-white text-[11px] text-amber-800/90 flex items-center gap-2">
+                <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                Showing only equipment assigned to you as <strong className="text-amber-700">PIC 1 / PIC 2</strong>. These are the items left uninspected for you in this period.
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="mobile-cards w-full table-fixed text-left">
+                <thead>
+                  <tr className="border-b border-line bg-ink-950/40">
+                    <th className="th w-[15%]">Equipment ID</th>
+                    <th className="th w-[12%]">Type</th>
+                    <th className="th w-[17%]">Entity / Facility</th>
+                    <th className="th w-[16%]">Area / Location</th>
+                    <th className="th w-[13%]">PIC 1</th>
+                    <th className="th w-[13%]">PIC 2</th>
+                    <th className="th w-[14%] text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-ink-500">
+                        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-ink-700 border-t-ember-500 mb-2" />
+                        <p className="text-xs">Loading equipment...</p>
+                      </td>
+                    </tr>
+                  ) : uninspSlice.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-ink-500">
+                        <p className="text-sm">
+                          {notInspectedCount === 0
+                            ? 'All equipment in the masterlist has been inspected. No pending items.'
+                            : 'No uninspected equipment match your filters.'}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    uninspSlice.map((equip) => (
+                      <tr key={equip.id} className="transition-colors hover:bg-white/[0.03]">
+                        <td data-label="Equipment ID" className="td font-bold text-amber-400">
+                          <span className="block truncate">{equip.no_id}</span>
+                        </td>
+                        <td data-label="Type" className="td">
+                          <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(equip.type)}`}>
+                            {equip.type}
+                          </span>
+                        </td>
+                        <td data-label="Entity / Facility" className="td text-xs">
+                          {equip.entity && <div className="text-ink-200 font-medium truncate">{equip.entity}</div>}
+                          {equip.facility && <div className="text-ink-500 text-[11px] truncate">{equip.facility}</div>}
+                          {!equip.entity && !equip.facility && <span className="text-ink-600 italic">—</span>}
+                        </td>
+                        <td data-label="Area / Location" className="td text-xs text-ink-300">
+                          <span className="block truncate">
+                            {[equip.area, equip.location].filter(Boolean).join(' · ') || (equip.area || '—')}
+                          </span>
+                        </td>
+                        <td data-label="PIC 1" className="td">
+                          <PicCell pic={equip.pic_1} accent="border-amber-400/40 text-amber-400 bg-amber-950/40" />
+                        </td>
+                        <td data-label="PIC 2" className="td">
+                          <PicCell pic={equip.pic_2} accent="border-amber-400/40 text-amber-400 bg-amber-950/40" />
+                        </td>
+                        <td data-label="Status" className="td text-right">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border tone-amber whitespace-nowrap">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            Not Inspected
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              total={uninspectedRows.length}
+              page={uninspPage}
+              pageSize={PAGE_SIZE}
+              onChange={setUninspPage}
+            />
+            </>
+            )}
+            </>
             )}
           </div>
         </div>

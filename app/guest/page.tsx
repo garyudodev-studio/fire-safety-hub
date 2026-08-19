@@ -401,6 +401,7 @@ function TypeBreakdown({
               </div>
             </div>
           )}
+
         </>
       )}
     </div>
