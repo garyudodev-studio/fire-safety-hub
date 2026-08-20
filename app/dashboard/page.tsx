@@ -1002,9 +1002,6 @@ export default function AdminDashboard() {
                         <button onClick={openCreateSheet} className="btn btn-primary w-full sm:w-auto justify-center">
                             <PlusIcon /> Add Equipment
                         </button>
-                        <button onClick={handleSignOut} className="btn btn-ghost w-full sm:w-auto justify-center" title="Sign out">
-                            Sign out
-                        </button>
                     </div>
                 </header>
 

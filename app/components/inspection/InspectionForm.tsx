@@ -27,6 +27,56 @@ interface PicItem {
 
 import { InspectionRecord } from './InspectionDetailModal';
 
+const TYPE_FILTERS: { value: string; label: string; icon: React.ReactNode }[] = [
+  {
+    value: 'Fire Extinguisher',
+    label: 'Fire Extinguisher',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v2" />
+        <rect x="8" y="5" width="8" height="16" rx="2" />
+        <rect x="10" y="2" width="4" height="3" rx="1" />
+        <line x1="8" y1="12" x2="16" y2="12" />
+      </svg>
+    ),
+  },
+  {
+    value: 'Fire Alarm',
+    label: 'Fire Alarm',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+  },
+  {
+    value: 'Fire Hydrant',
+    label: 'Hydrant Hose',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v2" />
+        <path d="M12 19v2" />
+        <path d="M5 8h14" />
+        <path d="M6.5 8 5 12h14l-1.5-4z" />
+        <path d="M7 12v7M17 12v7" />
+        <path d="M5 12H3M21 12h-2" />
+      </svg>
+    ),
+  },
+  {
+    value: 'Emergency Lamp',
+    label: 'Emergency Lamp',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z" />
+      </svg>
+    ),
+  },
+];
+
 interface InspectionFormProps {
   editRecord?: InspectionRecord | null;
   onSuccess: () => void;
@@ -39,6 +89,7 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
 
   // Selection & Filter states
   const [selectedFacility, setSelectedFacility] = useState<string>('All');
+  const [userFacility, setUserFacility] = useState<string | null>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentItem | null>(null);
@@ -129,7 +180,7 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
       if (sessionData?.session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, pic:pic_id(name)')
+          .select('role, facility, entity, pic:pic_id(name, facility, entity)')
           .eq('id', sessionData.session.user.id)
           .single();
           
@@ -137,6 +188,16 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
           lockedName = profile.pic.name;
           setIsLockedInspector(true);
           setInspectorName(lockedName);
+        }
+
+        // Auto-scope equipment list to the facility detected from the logged-in account.
+        // The facility filter is hidden for these users since it is always derived here.
+        if (profile?.role !== 'admin') {
+          const assignedFacility = profile?.facility || profile?.pic?.facility || null;
+          if (assignedFacility) {
+            setUserFacility(assignedFacility);
+            setSelectedFacility(assignedFacility);
+          }
         }
       }
 
@@ -205,14 +266,9 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
     return () => { cancelled = true; };
   }, [selectedEquipment, week, monthYear, supabase, editRecord]);
 
-  // Unique list of facilities/factories for filter dropdown
+  // Unique list of facilities/factories for filter dropdown (admin fallback only)
   const uniqueFacilities = Array.from(
     new Set(masterlist.map((e) => e.facility).filter(Boolean))
-  ).sort();
-
-  // Unique list of types for filter dropdown
-  const uniqueTypes = Array.from(
-    new Set(masterlist.map((e) => e.type).filter(Boolean))
   ).sort();
 
   // Weekly coverage vs the masterlist — read-only calculation, never mutates data.
@@ -564,34 +620,67 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
 
         {!selectedEquipment ? (
           <div className="space-y-4">
-            {/* Factory & Equipment Type Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="field-label text-xs">Filter by Factory / Facility</label>
-                <select
-                  value={selectedFacility}
-                  onChange={(e) => setSelectedFacility(e.target.value)}
-                  className="input text-xs"
-                >
-                  <option value="All">All Factories / Facilities</option>
-                  {uniqueFacilities.map((fac) => (
-                    <option key={fac} value={fac}>{fac}</option>
-                  ))}
-                </select>
+            {/* Facility: auto-detected from the logged-in account, otherwise admin fallback */}
+            {userFacility ? (
+              <div className="flex items-center gap-2.5 rounded-xl border border-ember-500/30 bg-ember-500/10 px-3.5 py-2.5 text-xs text-ink-200">
+                <svg className="shrink-0 text-ember-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>
+                  Facility detected from your account:{' '}
+                  <strong className="text-ember-300">{selectedFacility}</strong>
+                </span>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="field-label text-xs">Filter by Factory / Facility</label>
+                  <select
+                    value={selectedFacility}
+                    onChange={(e) => setSelectedFacility(e.target.value)}
+                    className="input text-xs"
+                  >
+                    <option value="All">All Factories / Facilities</option>
+                    {uniqueFacilities.map((fac) => (
+                      <option key={fac} value={fac}>{fac}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
-              <div>
-                <label className="field-label text-xs">Filter by Equipment Type</label>
-                <select
-                  value={selectedTypeFilter}
-                  onChange={(e) => setSelectedTypeFilter(e.target.value)}
-                  className="input text-xs"
+            {/* Equipment Type icon filter */}
+            <div>
+              <label className="field-label text-xs">Filter by Equipment Type</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypeFilter('All')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                    selectedTypeFilter === 'All'
+                      ? 'bg-ember-600/20 text-ember-300 border-ember-500/50'
+                      : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
+                  }`}
                 >
-                  <option value="All">All Equipment Types</option>
-                  {uniqueTypes.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                  All
+                </button>
+                {TYPE_FILTERS.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setSelectedTypeFilter(t.value)}
+                    title={`Filter by ${t.label}`}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                      selectedTypeFilter === t.value
+                        ? 'bg-ember-600/20 text-ember-300 border-ember-500/50'
+                        : 'bg-ink-900/60 text-ink-400 border-line hover:bg-ink-800'
+                    }`}
+                  >
+                    {t.icon}
+                    {t.label}
+                  </button>
+                ))}
               </div>
             </div>
 

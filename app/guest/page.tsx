@@ -408,6 +408,157 @@ function TypeBreakdown({
   );
 }
 
+function InspectorPerformance({
+  masterlist,
+  inspections,
+  periodText,
+}: {
+  masterlist: EquipmentMaster[];
+  inspections: InspectionRecord[];
+  periodText: string;
+}) {
+  const [collapsed, setCollapsed] = useState(true);
+
+  const rows = useMemo(() => {
+    type Stats = { name: string; assigned: number; inspected: number; pass: number; remaining: number; carried: number };
+    const stats = new Map<string, Stats>();
+
+    const get = (name: string): Stats => {
+      let s = stats.get(name);
+      if (!s) {
+        s = { name, assigned: 0, inspected: 0, pass: 0, remaining: 0, carried: 0 };
+        stats.set(name, s);
+      }
+      return s;
+    };
+
+    // One inspection per equipment within the period.
+    const inspectedByEquip = new Map<string, InspectionRecord>();
+    inspections.forEach((i) => { if (!inspectedByEquip.has(i.equipment_id)) inspectedByEquip.set(i.equipment_id, i); });
+
+    masterlist.forEach((m) => {
+      const primary = m.pic_1?.name;
+      const secondary = m.pic_2?.name;
+      if (!primary) return;
+
+      const insp = inspectedByEquip.get(m.id);
+
+      get(primary).assigned += 1;
+      if (secondary) get(secondary).assigned += 1;
+
+      if (insp?.inspector_name) {
+        // Equipment inspected by the person who actually did it.
+        const owner = insp.inspector_name === secondary ? secondary : primary;
+        const s = get(owner);
+        s.inspected += 1;
+        if (insp.status === 'PASS') s.pass += 1;
+      } else {
+        // Un-inspected equipment is carried by PIC 1 (primary is on all equipment).
+        get(primary).remaining += 1;
+        if (secondary) get(secondary).carried += 1;
+      }
+    });
+
+    return Array.from(stats.values())
+      .map((s) => ({
+        name: s.name,
+        total: s.assigned,
+        bySelf: s.inspected,
+        pass: s.pass,
+        remaining: s.remaining,
+        carried: s.carried,
+        coverage: s.assigned > 0 ? Math.round((s.inspected / s.assigned) * 100) : 0,
+        passRate: s.inspected > 0 ? Math.round((s.pass / s.inspected) * 100) : 0,
+      }))
+      .sort((a, b) => b.bySelf - a.bySelf || b.total - a.total);
+  }, [masterlist, inspections]);
+
+  if (rows.length === 0) return null;
+
+  const maxTotal = Math.max(...rows.map((r) => r.total));
+
+  return (
+    <div className="panel p-5 space-y-4">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="group flex w-full items-center gap-2 text-left"
+        aria-expanded={!collapsed}
+      >
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-stone-100 text-stone-600 transition-transform duration-300 ${collapsed ? '' : 'rotate-180'}`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800 flex flex-wrap items-center gap-2">
+            Inspector Performance
+            <span className="text-[10px] font-normal px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 font-mono">
+              Period: {periodText}
+            </span>
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            Each item counts once · whoever inspected it · un-inspected share carried by PIC 1
+          </p>
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="grid gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((r, idx) => {
+            const color = r.coverage >= 50 ? '#10b981' : '#d97706';
+            const medal = idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : idx === 1 ? 'bg-stone-200 text-stone-700 border-stone-300' : idx === 2 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-stone-100 text-stone-500 border-stone-200';
+            return (
+              <div key={r.name} className="rounded-xl border border-stone-200 bg-stone-50/60 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${medal}`}>
+                    {idx + 1}
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-stone-800" title={r.name}>
+                    {r.name}
+                  </span>
+                  <div className="shrink-0 text-right">
+                    <span className="block text-lg font-bold leading-none text-stone-900">{r.bySelf}</span>
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-stone-500">inspections</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="relative h-2 rounded-full bg-stone-200 overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                      style={{ width: `${(r.bySelf / maxTotal) * 100}%`, backgroundColor: color }}
+                    />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-stone-500">
+                    <span>out of <strong className="text-stone-900">{r.total}</strong> assigned equipment</span>
+                    {r.carried > 0 ? (
+                      <span className="text-amber-700 font-bold" title="Un-inspected share rolled up to PIC 1">{r.carried} not yet inspected</span>
+                    ) : r.remaining > 0 ? (
+                      <span className="text-amber-700 font-bold">{r.remaining} not yet inspected</span>
+                    ) : (
+                      <span className="text-emerald-700 font-bold">✓ All inspected</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-[11px]">
+                  <span className="text-stone-600">
+                    Covered <strong className="text-stone-900">{r.coverage}%</strong>
+                  </span>
+                  <span className="font-bold" style={{ color: r.bySelf > 0 ? (r.passRate >= 80 ? '#10b981' : r.passRate >= 50 ? '#d97706' : '#dc2626') : '#a8a29e' }}>
+                    {r.passRate}% PASS ({r.pass}/{r.bySelf})
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Pagination({
   total, page, pageSize, onChange,
 }: {
@@ -1298,6 +1449,21 @@ function GuestReportsInner() {
             ) : (
               <div className="panel">
                 <FilterRequired scope="equipment coverage breakdown" />
+              </div>
+            )}
+          </div>
+
+          {/* ── Inspector Performance KPI ── */}
+          <div className="mt-6">
+            {hasPeriodFilter ? (
+              <InspectorPerformance
+                masterlist={filteredMasterlist}
+                inspections={scopeInspections}
+                periodText={periodText}
+              />
+            ) : (
+              <div className="panel">
+                <FilterRequired scope="inspector performance" />
               </div>
             )}
           </div>

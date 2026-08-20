@@ -308,6 +308,16 @@ export default function InspectionsPage() {
     return Array.from(new Set(base.map((i) => i.week).filter(Boolean))).sort();
   }, [inspections, selectedMonth]);
 
+  // Entity / Facility options derived from the masterlist (admin full-access filter).
+  const uniqueEntities = useMemo(() => {
+    return ['All', ...Array.from(new Set(masterlist.map((e) => e.entity).filter(Boolean) as string[])).sort()];
+  }, [masterlist]);
+
+  const uniqueFacilities = useMemo(() => {
+    const base = masterlist.filter((m) => selectedEntity === 'All' || m.entity === selectedEntity);
+    return ['All', ...Array.from(new Set(base.map((m) => m.facility).filter(Boolean) as string[])).sort()];
+  }, [masterlist, selectedEntity]);
+
   // Filtered Inspections
   const filteredInspections = useMemo(() => {
     return inspections.filter((item) => {
@@ -506,6 +516,35 @@ export default function InspectionsPage() {
                   </svg>
                 </div>
               </div>
+
+              {isAdmin && (
+                <>
+                  <div className="flex-1 min-w-[130px]">
+                    <label className="field-label text-[10px]">Entity</label>
+                    <select
+                      value={selectedEntity}
+                      onChange={(e) => { const v = e.target.value; setSelectedEntity(v); if (v !== selectedEntity) setSelectedFacility('All'); }}
+                      className="input text-xs"
+                    >
+                      {uniqueEntities.map((e) => (
+                        <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[130px]">
+                    <label className="field-label text-[10px]">Facility</label>
+                    <select
+                      value={selectedFacility}
+                      onChange={(e) => setSelectedFacility(e.target.value)}
+                      className="input text-xs"
+                    >
+                      {uniqueFacilities.map((f) => (
+                        <option key={f} value={f}>{f === 'All' ? 'All Facilities' : f}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div className="flex-1 min-w-[130px]">
                 <label className="field-label text-[10px]">Equipment Type</label>
