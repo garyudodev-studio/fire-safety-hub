@@ -650,15 +650,21 @@ export default function ReportsPage() {
     if (records.length === 0) return;
     setPrinting(true);
     try {
-      // Pre-fetch digital signatures for the inspectors involved
-      const inspectorNames = Array.from(new Set(records.map((r) => r.inspector_name)));
-      const signatures: Record<string, string | null> = {};
-      for (const name of inspectorNames) {
-        const { data } = await supabase.from('pic').select('signature_url').eq('name', name).single();
-        signatures[name] = data?.signature_url || null;
-      }
+      // Build full equipment-joined records for all inspections so previous week matching works
+      const allPrintRecords = inspections.map((r) => {
+        const eq = equipmentById.get(r.equipment_id);
+        return {
+          ...r,
+          equipment: {
+            area: r.equipment?.area ?? eq?.area ?? null,
+            location: r.equipment?.location ?? eq?.location ?? null,
+            pic_1: eq?.pic_1 ?? null,
+            pic_2: eq?.pic_2 ?? null,
+          },
+        };
+      });
 
-      // Join equipment-level details (area, location, PIC profiles) to each record
+      // Target records to print
       const printRecords = records.map((r) => {
         const eq = equipmentById.get(r.equipment_id);
         return {
@@ -672,7 +678,24 @@ export default function ReportsPage() {
         };
       });
 
-      await printInspectionResults(printRecords, signatures);
+      // Pre-fetch digital signatures for all inspectors in target + previous week records
+      const inspectorNames = Array.from(
+        new Set(allPrintRecords.map((r) => r.inspector_name).filter(Boolean))
+      );
+      const signatures: Record<string, string | null> = {};
+      if (inspectorNames.length > 0) {
+        const { data } = await supabase
+          .from('pic')
+          .select('name, signature_url')
+          .in('name', inspectorNames);
+        if (data) {
+          data.forEach((p: { name: string; signature_url?: string | null }) => {
+            if (p.name) signatures[p.name] = p.signature_url || null;
+          });
+        }
+      }
+
+      await printInspectionResults(printRecords, signatures, allPrintRecords);
     } catch (err) {
       setAlertModal({
         isOpen: true,

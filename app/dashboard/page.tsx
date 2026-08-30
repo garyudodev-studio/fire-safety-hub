@@ -791,13 +791,56 @@ export default function AdminDashboard() {
                 }
             }
 
+            // If filtering for Emergency Lamp, also fetch Exit Lamp data from latest inspections
+            let recordsToPrint = filteredEquipment;
+            if (filterType === 'Emergency Lamp') {
+                // Get all Emergency Lamp equipment IDs
+                const emergencyLampIds = filteredEquipment
+                    .filter(e => e.type === 'Emergency Lamp')
+                    .map(e => e.id);
+
+                if (emergencyLampIds.length > 0) {
+                    // Fetch latest inspections for these Emergency Lamps
+                    const { data: inspections } = await supabase
+                        .from('inspections')
+                        .select('equipment_id, answers, created_at')
+                        .in('equipment_id', emergencyLampIds)
+                        .order('created_at', { ascending: false });
+
+                    // Get latest inspection per equipment
+                    const latestInspections = new Map<string, { answers: Record<string, 'YES' | 'NO' | 'NA'> }>();
+                    inspections?.forEach((insp: { equipment_id: string; answers?: Record<string, 'YES' | 'NO' | 'NA'> }) => {
+                        if (!latestInspections.has(insp.equipment_id)) {
+                            latestInspections.set(insp.equipment_id, { answers: insp.answers || {} });
+                        }
+                    });
+
+                    // Add exit lamp status to Emergency Lamp equipment records
+                    recordsToPrint = filteredEquipment.map(e => {
+                        if (e.type === 'Emergency Lamp') {
+                            const latestInsp = latestInspections.get(e.id);
+                            const exitLampAnswer = latestInsp?.answers?.['el_2'];
+                            return {
+                                ...e,
+                                // Add exit lamp status as a custom property
+                                exit_lamp_status: exitLampAnswer === 'NA' ? 'Not Installed' : 
+                                                  exitLampAnswer === 'YES' ? 'Installed' : 
+                                                  exitLampAnswer === 'NO' ? 'Not Working' : 'N/A'
+                            };
+                        }
+                        return e;
+                    });
+                }
+            }
+
             await printMasterlist({
-                records: filteredEquipment,
+                records: recordsToPrint,
                 entity: filterEntity || 'All Entities',
                 facility: filterFacility || 'All Facilities',
                 preparedBy,
                 preparedByTitle,
                 signatureUrl,
+                showExitLampColumn: filterType === 'Emergency Lamp',
             });
         } catch (err) {
             setAlertModal({ isOpen: true, title: 'Print Error', message: err instanceof Error ? err.message : 'Failed to generate printable masterlist.', type: 'error' });

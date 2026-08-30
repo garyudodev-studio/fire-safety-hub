@@ -112,18 +112,47 @@ function absolutizePaths(html: string): string {
 
 // ─── Page builder ────────────────────────────────────────────────────────────
 
+export function resolveMonthFormPair(
+  target: PrintInspectionRecord,
+  allRecords: PrintInspectionRecord[]
+): { rightInsp: PrintInspectionRecord; leftInsp: PrintInspectionRecord | null } {
+  const sameMonthEquip = allRecords
+    .filter(
+      (r) =>
+        r.equipment_id === target.equipment_id &&
+        r.month_year === target.month_year
+    )
+    .sort((a, b) => {
+      const wA = parseInt(a.week) || 0;
+      const wB = parseInt(b.week) || 0;
+      if (wA !== wB) return wA - wB;
+      return (a.inspection_date || '').localeCompare(b.inspection_date || '');
+    });
+
+  if (sameMonthEquip.length === 0) {
+    return { rightInsp: target, leftInsp: null };
+  }
+
+  // Right Column = latest inspection for this equipment in this month
+  const rightInsp = sameMonthEquip[sameMonthEquip.length - 1];
+
+  // Left Column = previous week inspection for this equipment in this month (if available)
+  const leftInsp = sameMonthEquip.length > 1 ? sameMonthEquip[sameMonthEquip.length - 2] : null;
+
+  return { rightInsp, leftInsp };
+}
+
 function fillInspectionPage(
   container: Element,
-  insp: PrintInspectionRecord,
+  rightInsp: PrintInspectionRecord,
+  leftInsp: PrintInspectionRecord | null | undefined,
   signatures: Record<string, string | null>
 ) {
-  const equipment = insp.equipment;
-  const monthYear = insp.month_year || '';
-  const week = insp.week || '';
-  const date = insp.inspection_date || '';
+  const equipment = rightInsp.equipment || leftInsp?.equipment;
+  const monthYear = rightInsp.month_year || leftInsp?.month_year || '';
 
   // ── Identity info table: ID / AREA / LOCATION / Month-Year / Week ──
-  let weekFilled = false;
+  const weekCells: Element[] = [];
   container.querySelectorAll('.info-table td').forEach((cell) => {
     const el = cell as HTMLElement;
     const txt = el.textContent || '';
@@ -131,7 +160,7 @@ function fillInspectionPage(
 
     if (/^(ALARM|APAR|HYDRANT|LIGHT)\s+ID$/.test(trimmed)) {
       const next = el.nextElementSibling;
-      if (next) next.textContent = `: ${insp.equipment_no_id}`;
+      if (next) next.textContent = `: ${rightInsp.equipment_no_id}`;
     } else if (trimmed === 'AREA') {
       const next = el.nextElementSibling;
       if (next) next.textContent = `: ${equipment?.area || ''}`;
@@ -140,48 +169,83 @@ function fillInspectionPage(
       if (next) next.textContent = `: ${equipment?.location || ''}`;
     } else if (/Month\s*\/\s*Year/.test(txt)) {
       el.innerHTML = appendAfterColon(el.innerHTML, formatMonthYearLabel(monthYear));
-    } else if (/Week/.test(txt) && !weekFilled) {
-      el.innerHTML = appendAfterColon(el.innerHTML, week);
-      weekFilled = true;
+    } else if (/Week/.test(txt)) {
+      weekCells.push(cell);
     }
   });
+
+  if (weekCells[0]) {
+    weekCells[0].innerHTML = appendAfterColon(
+      weekCells[0].innerHTML,
+      leftInsp?.week ? String(leftInsp.week) : ''
+    );
+  }
+  if (weekCells[1]) {
+    weekCells[1].innerHTML = appendAfterColon(
+      weekCells[1].innerHTML,
+      rightInsp?.week ? String(rightInsp.week) : ''
+    );
+  }
 
   const checklistTable = container.querySelector('.checklist-table');
   if (!checklistTable) return;
 
-  // ── Date column in checklist header (fill the first one only) ──
-  let dateFilled = false;
+  // ── Date column in checklist header (Left = previous week, Right = latest) ──
+  const dateCells: Element[] = [];
   checklistTable.querySelectorAll('td').forEach((cell) => {
-    if (dateFilled) return;
     const el = cell as HTMLElement;
-    if (/Date/.test(el.textContent || '')) {
-      el.innerHTML = appendAfterColon(el.innerHTML, date);
-      dateFilled = true;
+    if (el.getAttribute('colspan') === '2' && /Date/i.test(el.textContent || '')) {
+      dateCells.push(cell);
     }
   });
 
+  if (dateCells[0]) {
+    dateCells[0].innerHTML = appendAfterColon(
+      dateCells[0].innerHTML,
+      leftInsp?.inspection_date || ''
+    );
+  }
+  if (dateCells[1]) {
+    dateCells[1].innerHTML = appendAfterColon(
+      dateCells[1].innerHTML,
+      rightInsp?.inspection_date || ''
+    );
+  }
+
   // ── Mark checklist answers ──
-  // The template data rows (the ones with 6 cells) are ordered exactly like the
-  // checklist definitions, so we walk them sequentially and consume answers in
-  // order. This is robust against typo differences between template text and
-  // the definition labels (e.g. "DETECTORE" vs "DETECTOR").
-  const checklist = getChecklistForType(insp.equipment_type);
-  const answers: ('YES' | 'NO' | 'NA' | undefined)[] = [];
+  // Column 1 (Left): cells[2] for YES/NA, cells[3] for NO
+  // Column 2 (Right): cells[4] for YES/NA, cells[5] for NO
+  const checklist = getChecklistForType(rightInsp.equipment_type);
+  const leftAnswers: ('YES' | 'NO' | 'NA' | undefined)[] = [];
+  const rightAnswers: ('YES' | 'NO' | 'NA' | undefined)[] = [];
+
   checklist.sections.forEach((section) =>
-    section.items.forEach((item) => answers.push(insp.answers?.[item.id]))
+    section.items.forEach((item) => {
+      leftAnswers.push(leftInsp?.answers?.[item.id]);
+      rightAnswers.push(rightInsp?.answers?.[item.id]);
+    })
   );
 
   let ansIdx = 0;
   checklistTable.querySelectorAll('tr').forEach((tr) => {
-    if (ansIdx >= answers.length) return;
+    if (ansIdx >= rightAnswers.length) return;
     const cells = tr.querySelectorAll('td');
     if (cells.length < 6) return; // header / section rows
     if (!(cells[1].textContent || '').trim()) return;
 
-    const answer = answers[ansIdx];
-    if (answer === 'YES') setAnswerCell(cells[2], '✓', '#008000');
-    else if (answer === 'NO') setAnswerCell(cells[3], '✓', '#cc0000');
-    else if (answer === 'NA') setAnswerCell(cells[2], 'N/A', '#6b7280');
+    if (leftInsp) {
+      const leftAns = leftAnswers[ansIdx];
+      if (leftAns === 'YES') setAnswerCell(cells[2], '✓', '#008000');
+      else if (leftAns === 'NO') setAnswerCell(cells[3], '✓', '#cc0000');
+      else if (leftAns === 'NA') setAnswerCell(cells[2], 'N/A', '#6b7280');
+    }
+
+    if (rightInsp) {
+      const rightAns = rightAnswers[ansIdx];
+      if (rightAns === 'YES') setAnswerCell(cells[4], '✓', '#008000');
+      else if (rightAns === 'NO') setAnswerCell(cells[5], '✓', '#cc0000');
+      else if (rightAns === 'NA') setAnswerCell(cells[4], 'N/A', '#6b7280');
+    }
 
     ansIdx++;
   });
@@ -216,33 +280,65 @@ function fillInspectionPage(
   // ── Remarks & Action Taken boxes ──
   const remarkTitle = container.querySelector('.keterangan-box .box-title');
   if (remarkTitle) {
-    const text = insp.remarks?.trim() ? insp.remarks : '-';
+    const parts: string[] = [];
+    if (leftInsp?.remarks?.trim()) {
+      parts.push(`[W${leftInsp.week}]: ${leftInsp.remarks.trim()}`);
+    }
+    if (rightInsp?.remarks?.trim()) {
+      parts.push(`[W${rightInsp.week}]: ${rightInsp.remarks.trim()}`);
+    }
+    const text = parts.length > 0 ? parts.join('\n') : '-';
     (remarkTitle as HTMLElement).innerHTML +=
       `<div style="font-weight:normal;font-size:9px;color:#000;padding-top:2px;white-space:pre-wrap;">${escapeHtml(text)}</div>`;
   }
 
   const actionTitle = container.querySelector('.tindakan-box .box-title');
   if (actionTitle) {
-    const text = insp.action_taken?.trim() ? insp.action_taken : '-';
+    const parts: string[] = [];
+    if (leftInsp?.action_taken?.trim()) {
+      parts.push(`[W${leftInsp.week}]: ${leftInsp.action_taken.trim()}`);
+    }
+    if (rightInsp?.action_taken?.trim()) {
+      parts.push(`[W${rightInsp.week}]: ${rightInsp.action_taken.trim()}`);
+    }
+    const text = parts.length > 0 ? parts.join('\n') : '-';
     (actionTitle as HTMLElement).innerHTML +=
       `<div style="font-weight:normal;font-size:9px;color:#000;padding-top:2px;white-space:pre-wrap;">${escapeHtml(text)}</div>`;
   }
 
-  // ── Inspector (checker) name & digital signature ──
-  // Render the signature centered, overlapping the front of the printed name
-  // (negative bottom margin + higher z-index) so it reads like a hand-signed box.
-  const sig = signatures[insp.inspector_name] || null;
+  // ── Inspector (checker) names & digital signatures ──
   const checkerBoxes = container.querySelectorAll('.checker-box');
-  const checkerContent = checkerBoxes[0]?.querySelector('.box-content');
-  if (checkerContent) {
-    const sigImg = sig
-      ? `<img src="${sig}" style="max-height:46px;width:auto;max-width:100%;object-fit:contain;display:block;margin:0 auto -6px;position:relative;z-index:1;" />`
-      : '';
-    (checkerContent as HTMLElement).innerHTML =
-      `<div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;">
-        ${sigImg}
-        <span style="position:relative;text-align:center;font-size:9px;font-weight:bold;line-height:1.25;">${escapeHtml(insp.inspector_name)}</span>
-       </div>`;
+
+  // Left Checker Box (checkerBoxes[0])
+  if (checkerBoxes[0] && leftInsp) {
+    const contentEl = checkerBoxes[0].querySelector('.box-content');
+    if (contentEl) {
+      const sig = signatures[leftInsp.inspector_name] || null;
+      const sigImg = sig
+        ? `<img src="${sig}" style="max-height:46px;width:auto;max-width:100%;object-fit:contain;display:block;margin:0 auto -6px;position:relative;z-index:1;" />`
+        : '';
+      (contentEl as HTMLElement).innerHTML =
+        `<div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;">
+          ${sigImg}
+          <span style="position:relative;text-align:center;font-size:9px;font-weight:bold;line-height:1.25;">${escapeHtml(leftInsp.inspector_name)}</span>
+         </div>`;
+    }
+  }
+
+  // Right Checker Box (checkerBoxes[1])
+  if (checkerBoxes[1] && rightInsp) {
+    const contentEl = checkerBoxes[1].querySelector('.box-content');
+    if (contentEl) {
+      const sig = signatures[rightInsp.inspector_name] || null;
+      const sigImg = sig
+        ? `<img src="${sig}" style="max-height:46px;width:auto;max-width:100%;object-fit:contain;display:block;margin:0 auto -6px;position:relative;z-index:1;" />`
+        : '';
+      (contentEl as HTMLElement).innerHTML =
+        `<div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;">
+          ${sigImg}
+          <span style="position:relative;text-align:center;font-size:9px;font-weight:bold;line-height:1.25;">${escapeHtml(rightInsp.inspector_name)}</span>
+         </div>`;
+    }
   }
 }
 
@@ -281,14 +377,31 @@ async function loadTemplateHtml(type: string): Promise<string> {
  */
 export async function buildInspectionPrintPages(
   inspections: PrintInspectionRecord[],
-  signatures: Record<string, string | null>
+  signatures: Record<string, string | null>,
+  allInspections?: PrintInspectionRecord[]
 ): Promise<{ html: string; header: string }> {
   let finalHtml = '';
   let header = '';
 
-  for (let i = 0; i < inspections.length; i++) {
-    const insp = inspections[i];
-    const raw = await loadTemplateHtml(insp.equipment_type);
+  const pool = allInspections || inspections;
+
+  // Group target inspections by equipment_id + month_year so each equipment generates 1 combined monthly checklist page
+  const targetGroups = new Map<string, PrintInspectionRecord>();
+  inspections.forEach((insp) => {
+    const key = `${insp.equipment_id}_${insp.month_year}`;
+    if (!targetGroups.has(key)) {
+      targetGroups.set(key, insp);
+    }
+  });
+
+  const uniquePairs = Array.from(targetGroups.values()).map((targetInsp) =>
+    resolveMonthFormPair(targetInsp, pool)
+  );
+
+  for (let i = 0; i < uniquePairs.length; i++) {
+    const { rightInsp, leftInsp } = uniquePairs[i];
+
+    const raw = await loadTemplateHtml(rightInsp.equipment_type);
 
     if (i === 0) {
       const bodyMatch = raw.match(/([\s\S]*?<body[^>]*>)/);
@@ -299,9 +412,9 @@ export async function buildInspectionPrintPages(
     const container = doc.querySelector('.a4-container');
     if (!container) continue;
 
-    fillInspectionPage(container, insp, signatures);
+    fillInspectionPage(container, rightInsp, leftInsp, signatures);
 
-    const page = i < inspections.length - 1
+    const page = i < uniquePairs.length - 1
       ? `<div style="page-break-after: always; break-after: page;">${container.outerHTML}</div>`
       : `<div>${container.outerHTML}</div>`;
 
@@ -320,11 +433,12 @@ export async function buildInspectionPrintPages(
  */
 export async function printInspectionResults(
   inspections: PrintInspectionRecord[],
-  signatures: Record<string, string | null>
+  signatures: Record<string, string | null>,
+  allInspections?: PrintInspectionRecord[]
 ): Promise<void> {
   if (inspections.length === 0) return;
 
-  const { html, header } = await buildInspectionPrintPages(inspections, signatures);
+  const { html, header } = await buildInspectionPrintPages(inspections, signatures, allInspections);
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -334,3 +448,4 @@ export async function printInspectionResults(
   printWindow.document.write(header + html + PRINT_FOOTER);
   printWindow.document.close();
 }
+

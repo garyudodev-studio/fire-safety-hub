@@ -16,6 +16,8 @@ export interface MasterlistPrintEquipment {
   expire_date?: string | null;
   pic_1?: { id?: string; name?: string | null } | null;
   pic_2?: { id?: string; name?: string | null } | null;
+  // Exit Lamp status from latest inspection (for Emergency Lamp equipment)
+  exit_lamp_status?: string;
 }
 
 export interface MasterlistPrintOptions {
@@ -25,16 +27,18 @@ export interface MasterlistPrintOptions {
   preparedBy?: string;
   preparedByTitle?: string;
   signatureUrl?: string | null;
+  // If true, show Exit Lamp column instead of Details for Emergency Lamp equipment
+  showExitLampColumn?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"');
 }
 
 function getTypeBadgeStyle(type: string): string {
@@ -306,8 +310,9 @@ const PAGE_STYLES = `
 </head>`;
 
 function buildMasterlistHtml(options: MasterlistPrintOptions): string {
-  const { records, entity, facility, preparedBy, preparedByTitle, signatureUrl } = options;
+  const { records, entity, facility, preparedBy, preparedByTitle, signatureUrl, showExitLampColumn } = options;
   const total = records.length;
+  const isEmergencyLampFilter = showExitLampColumn === true;
 
   const typeCounts = new Map<string, number>();
   records.forEach((r) => typeCounts.set(r.type, (typeCounts.get(r.type) || 0) + 1));
@@ -315,8 +320,20 @@ function buildMasterlistHtml(options: MasterlistPrintOptions): string {
     .map((t) => `<span class="type-chip" style="background:${getTypeBadgeStyle(t)}">${escapeHtml(t)}</span>`)
     .join('&nbsp; ');
 
+  // Exit Lamp status symbols
+  const getExitLampSymbol = (status?: string) => {
+    if (!status) return '<span class="dim">—</span>';
+    switch (status) {
+      case 'Installed': return '<span style="color:#10b981;font-size:14px;">✓</span>';
+      case 'Not Installed': return '<span style="color:#ef4444;font-size:14px;">✗</span>';
+      case 'Not Working': return '<span style="color:#f59e0b;font-size:14px;">⚠</span>';
+      default: return `<span class="dim">${escapeHtml(status)}</span>`;
+    }
+  };
+
   const rowsHtml = records.map((r, idx) => {
     const typeColor = getTypeBadgeStyle(r.type);
+    const isEmergencyLamp = r.type === 'Emergency Lamp';
 
     const details: string[] = [];
     if (r.zone) details.push(`Zone: ${escapeHtml(r.zone)}`);
@@ -334,6 +351,10 @@ function buildMasterlistHtml(options: MasterlistPrintOptions): string {
       details.push(`Expire: <span class="${cls}">${escapeHtml(r.expire_date)}${days < 0 ? ' (expired)' : days <= 30 ? ` (${days}d left)` : ''}</span>`);
     }
 
+    const exitLampCell = isEmergencyLamp && isEmergencyLampFilter
+      ? getExitLampSymbol(r.exit_lamp_status)
+      : (details.length > 0 ? details.join('<br/>') : '<span class="dim">—</span>');
+
     return `<tr>
       <td class="dim">${idx + 1}</td>
       <td class="id-cell">${escapeHtml(r.no_id || '')}</td>
@@ -342,7 +363,7 @@ function buildMasterlistHtml(options: MasterlistPrintOptions): string {
       <td>${r.facility ? escapeHtml(r.facility) : '<span class="dim">—</span>'}</td>
       <td>${r.area ? escapeHtml(r.area) : '<span class="dim">—</span>'}</td>
       <td>${r.location ? escapeHtml(r.location) : '<span class="dim">—</span>'}</td>
-      <td class="details-cell">${details.length > 0 ? details.join('<br/>') : '<span class="dim">—</span>'}</td>
+      <td class="details-cell" style="text-align:center;">${exitLampCell}</td>
       <td>${r.pic_1?.name ? escapeHtml(r.pic_1.name) : '<span class="dim">—</span>'}</td>
       <td>${r.pic_2?.name ? escapeHtml(r.pic_2.name) : '<span class="dim">—</span>'}</td>
     </tr>`;
@@ -396,7 +417,7 @@ ${PAGE_STYLES}
           <th>Facility</th>
           <th>Area</th>
           <th>Location</th>
-          <th>Details</th>
+          <th>${isEmergencyLampFilter ? 'Exit Lamp' : 'Details'}</th>
           <th>PIC 1</th>
           <th>PIC 2</th>
         </tr>
@@ -416,7 +437,7 @@ ${rowsHtml}
       <div class="signature-block">
         ${signatureUrl ? `<div class="sig-img"><img src="${escapeHtml(signatureUrl)}" alt="Signature" /></div>` : '<div class="sig-space"></div>'}
         <div class="sig-line"></div>
-        <b>${preparedBy ? escapeHtml(preparedBy) : 'Prepared &amp; Approved By'}</b>
+        <b>${preparedBy ? escapeHtml(preparedBy) : 'Prepared & Approved By'}</b>
         <div>${preparedByTitle ? escapeHtml(preparedByTitle) : 'Safety Officer / HSE Dept.'}</div>
       </div>
     </div>

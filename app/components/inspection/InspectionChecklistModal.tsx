@@ -7,10 +7,11 @@ import type { InspectionRecord } from './InspectionDetailModal';
 
 interface InspectionChecklistModalProps {
   inspection: InspectionRecord | null;
+  allInspections?: InspectionRecord[];
   onClose: () => void;
 }
 
-export default function InspectionChecklistModal({ inspection, onClose }: InspectionChecklistModalProps) {
+export default function InspectionChecklistModal({ inspection, allInspections, onClose }: InspectionChecklistModalProps) {
   const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -22,15 +23,57 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
     const load = async () => {
       try {
         const supabase = getSupabaseClient();
-        const sigs: Record<string, string | null> = {};
-        const { data } = await supabase
-          .from('pic')
-          .select('signature_url')
-          .eq('name', inspection.inspector_name)
-          .single();
-        sigs[inspection.inspector_name] = data?.signature_url || null;
 
-        const { html: bodyHtml, header } = await buildInspectionPrintPages([inspection], sigs);
+        // ── Resolve previous week inspection for the same month ──
+        let pool = allInspections || [];
+
+        let sameMonth = pool.filter(
+          (i) => i.equipment_id === inspection.equipment_id && i.month_year === inspection.month_year
+        );
+
+        if (sameMonth.length <= 1) {
+          const { data: monthData } = await supabase
+            .from('inspections')
+            .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact))`)
+            .eq('equipment_id', inspection.equipment_id)
+            .eq('month_year', inspection.month_year);
+
+          if (monthData && monthData.length > 0) {
+            sameMonth = monthData as InspectionRecord[];
+            // merge into pool if needed
+            pool = [...pool, ...sameMonth];
+          }
+        }
+
+        sameMonth.sort((a, b) => {
+          const wA = parseInt(a.week) || 0;
+          const wB = parseInt(b.week) || 0;
+          if (wA !== wB) return wA - wB;
+          return (a.inspection_date || '').localeCompare(b.inspection_date || '');
+        });
+
+        const rightInsp = sameMonth.length > 0 ? sameMonth[sameMonth.length - 1] : inspection;
+        const leftInsp = sameMonth.length > 1 ? sameMonth[sameMonth.length - 2] : null;
+
+        // Fetch signatures for all inspectors present
+        const inspectors = Array.from(
+          new Set([rightInsp.inspector_name, leftInsp?.inspector_name].filter(Boolean) as string[])
+        );
+
+        const sigs: Record<string, string | null> = {};
+        if (inspectors.length > 0) {
+          const { data } = await supabase
+            .from('pic')
+            .select('name, signature_url')
+            .in('name', inspectors);
+          if (data) {
+            data.forEach((p: { name: string; signature_url?: string | null }) => {
+              if (p.name) sigs[p.name] = p.signature_url || null;
+            });
+          }
+        }
+
+        const { html: bodyHtml, header } = await buildInspectionPrintPages([inspection], sigs, pool);
         if (!cancelled) {
           // Mobile fallback: scale the fixed-width (210mm) A4 page to fit small screens.
           const mobileStyle = `
@@ -52,7 +95,7 @@ export default function InspectionChecklistModal({ inspection, onClose }: Inspec
 
     load();
     return () => { cancelled = true; };
-  }, [inspection]);
+  }, [inspection, allInspections]);
 
   // Scale the A4 page precisely to the iframe width on any screen size.
   const handleIframeLoad = () => {

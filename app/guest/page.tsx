@@ -1403,6 +1403,7 @@ function GuestReportsInner() {
 
       <InspectionChecklistModal
         inspection={viewingChecklist}
+        allInspections={inspections}
         onClose={() => setViewingChecklist(null)}
       />
 
