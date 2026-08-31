@@ -556,6 +556,14 @@ export default function AdminDashboard() {
                 `<div class="logo-circle" style="background:none;"><img src="/logoyj.jpeg" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" /></div>`
             );
 
+            // ── Equipment QR Tag Replacement for Print Checklist ──
+            const qrTarget = item.id || item.no_id || '';
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrTarget)}`;
+            containerHtml = containerHtml.replace(
+                /https:\/\/api\.qrserver\.com\/v1\/create-qr-code\/[^\s"']*/g,
+                qrUrl
+            );
+
             if (i < items.length - 1) {
                 containerHtml = `<div style="page-break-after: always; break-after: page;">${containerHtml}</div>`;
             } else {
@@ -624,8 +632,8 @@ export default function AdminDashboard() {
             // Replace the tag ID placeholder (e.g. D1-001)
             tagHtml = tagHtml.replace(/<h2 class="tag-id">[^<]*<\/h2>/, `<h2 class="tag-id">${idValue}</h2>`);
 
-            // QR data: encode the equipment's unique UUID (item.id)
-            const qrTarget = item.id;
+            // QR data: encode the equipment's unique database UUID (item.id)
+            const qrTarget = item.id || item.no_id || '';
             const qrEncoded = encodeURIComponent(qrTarget);
             tagHtml = tagHtml.replace(/data=[^"']*/, `data=${qrEncoded}`);
 

@@ -10,6 +10,7 @@ interface PrintPic {
 }
 
 export interface PrintInspectionEquipment {
+  no_id?: string | null;
   area?: string | null;
   location?: string | null;
   pic_1?: PrintPic | null;
@@ -106,8 +107,11 @@ function formatMonthYearLabel(monthYear: string): string {
  * rewrite them to absolute URLs against the current origin.
  */
 function absolutizePaths(html: string): string {
+  if (typeof window === 'undefined') return html;
   const origin = window.location.origin;
-  return html.replace(/(src|href)="\/(?!\/)/g, `$1="${origin}/`);
+  let cleaned = html.replace(new RegExp(`src="${origin}/+(https?://)`, 'g'), 'src="$1');
+  cleaned = cleaned.replace(new RegExp(`href="${origin}/+(https?://)`, 'g'), 'href="$1');
+  return cleaned.replace(/(src|href)="\/(?!\/|https?:)/g, `$1="${origin}/`);
 }
 
 // ─── Page builder ────────────────────────────────────────────────────────────
@@ -340,6 +344,14 @@ function fillInspectionPage(
          </div>`;
     }
   }
+
+  // ── Equipment Sticker QR Code ──
+  const qrImg = container.querySelector('.equipment-qr-img') as HTMLImageElement | null;
+  if (qrImg) {
+    const targetId = rightInsp.equipment_id || rightInsp.equipment_no_id;
+    const qrData = encodeURIComponent(targetId);
+    qrImg.setAttribute('src', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${qrData}`);
+  }
 }
 
 const PRINT_STYLES = `
@@ -401,7 +413,12 @@ export async function buildInspectionPrintPages(
   for (let i = 0; i < uniquePairs.length; i++) {
     const { rightInsp, leftInsp } = uniquePairs[i];
 
-    const raw = await loadTemplateHtml(rightInsp.equipment_type);
+    let raw = await loadTemplateHtml(rightInsp.equipment_type);
+
+    // ── Pre-process raw template string matching dashboard sticker QR (app/dashboard/page.tsx line 630) ──
+    const targetId = rightInsp.equipment_id || rightInsp.equipment_no_id;
+    const qrEncoded = encodeURIComponent(targetId);
+    raw = raw.replace(/data=[^"']*/g, `data=${qrEncoded}`);
 
     if (i === 0) {
       const bodyMatch = raw.match(/([\s\S]*?<body[^>]*>)/);
@@ -414,9 +431,13 @@ export async function buildInspectionPrintPages(
 
     fillInspectionPage(container, rightInsp, leftInsp, signatures);
 
+    let containerHtml = container.outerHTML;
+    // Force replace QR data parameter matching the dashboard sticker QR method
+    containerHtml = containerHtml.replace(/data=[^"']*/g, `data=${qrEncoded}`);
+
     const page = i < uniquePairs.length - 1
-      ? `<div style="page-break-after: always; break-after: page;">${container.outerHTML}</div>`
-      : `<div>${container.outerHTML}</div>`;
+      ? `<div style="page-break-after: always; break-after: page;">${containerHtml}</div>`
+      : `<div>${containerHtml}</div>`;
 
     finalHtml += page;
   }
