@@ -81,10 +81,10 @@ function KpiCard({
   color?: string; borderColor?: string;
 }) {
   return (
-    <div className={`panel p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
-      <span className={`text-4xl font-bold mt-1 ${color}`}>{value}</span>
-      {sub && <span className="text-xs text-ink-500 mt-0.5">{sub}</span>}
+    <div className={`panel p-3 sm:p-5 flex flex-col items-center justify-center text-center gap-1 ${borderColor}`}>
+      <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <span className={`text-2xl sm:text-4xl font-bold mt-1 ${color}`}>{value}</span>
+      {sub && <span className="text-[10px] sm:text-xs text-ink-500 mt-0.5 leading-tight">{sub}</span>}
     </div>
   );
 }
@@ -271,19 +271,19 @@ function TypeBreakdown({
                   <div key={r.type} className="space-y-1.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
                       <span className="text-ink-200 font-semibold truncate">{r.type}</span>
-                      <div className="flex items-center gap-2 shrink-0 text-ink-400">
-                        <span className="bg-ink-850 px-2 py-0.5 rounded border border-line">
-                          Inspected: <strong className="text-ink-100">{r.inspectedCount}</strong> / <span className="text-ink-300">{r.totalEquip} Masterlist Total</span>
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 text-ink-400">
+                        <span className="bg-ink-850 px-2 py-0.5 rounded border border-line text-[11px] sm:text-xs">
+                          Inspected: <strong className="text-ink-100">{r.inspectedCount}</strong> / <span className="text-ink-300">{r.totalEquip}</span>
                         </span>
                         {r.passRate !== null && (
-                          <span style={{ color: col }} className="font-bold">{r.passRate}% PASS</span>
+                          <span style={{ color: col }} className="font-bold text-[11px] sm:text-xs">{r.passRate}% PASS</span>
                         )}
                         {r.notInspected > 0 ? (
-                          <span className="tone-amber font-bold border px-2 py-0.5 rounded text-[11px]">
+                          <span className="tone-amber font-bold border px-2 py-0.5 rounded text-[10px] sm:text-[11px]">
                             {r.notInspected} Not Yet Inspected
                           </span>
                         ) : (
-                          <span className="tone-emerald font-bold border px-2 py-0.5 rounded text-[11px]">
+                          <span className="tone-emerald font-bold border px-2 py-0.5 rounded text-[10px] sm:text-[11px]">
                             ✓ Complete
                           </span>
                         )}
@@ -360,7 +360,7 @@ function Pagination({
   if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-line bg-ink-950/40">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-line bg-ink-950/40">
       <span className="text-xs text-ink-500">
         {total === 0 ? '0 results' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
       </span>
@@ -721,14 +721,37 @@ export default function ReportsPage() {
     if (filteredInspections.length === 0) return;
     setPrintingReport(true);
     try {
+      const recordsWithCapa = filteredInspections.map((r) => {
+        const imp = improvementsMap.get(r.id) || null;
+        return {
+          ...r,
+          improvement: imp ? {
+            id: imp.id,
+            issue_description: imp.issue_description,
+            action_plan: imp.action_plan,
+            action_taken: imp.action_taken,
+            pic_name: imp.pic_name,
+            target_date: imp.target_date,
+            completion_date: imp.completion_date,
+            status: imp.status,
+            before_photo_url: imp.before_photo_url,
+            after_photo_url: imp.after_photo_url,
+          } : null,
+        };
+      });
+
       await printResultReport({
-        records: filteredInspections,
+        records: recordsWithCapa,
         entity: selectedEntity === 'All' ? 'All Entities' : selectedEntity,
         facility: selectedFacility === 'All' ? 'All Facilities' : selectedFacility,
         period: periodText,
         safeCount,
         unsafeCount,
+        resolvedCount,
+        inProgressCount,
+        openCount,
         passRate,
+        healthScore,
       });
     } catch (err) {
       setAlertModal({
@@ -990,36 +1013,40 @@ export default function ReportsPage() {
         ) : (
           <>
             {/* ── Report header: logo + entity/facility + period ── */}
-            <div className="border-b border-line bg-ink-950/40 px-5 py-4">
-              <div className="flex items-center gap-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logoyj.jpeg"
-                  alt="Company logo"
-                  className="h-14 w-14 rounded-xl border border-line bg-white object-contain p-1 shrink-0"
-                  draggable={false}
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-bold tracking-tight text-ink-100">Inspection Result Report</h3>
-                  <p className="text-xs text-ink-400 mt-0.5">
-                    <span className="font-semibold text-ember-500">{entityLabel}</span>
-                    <span className="text-ink-500 mx-1.5">·</span>
-                    <span className="font-semibold text-ink-200">{facilityLabel}</span>
-                  </p>
-                  <p className="text-[11px] text-ink-500 mt-0.5">
-                    Period: <span className="text-ink-300">{periodText}</span> ·{' '}
-                    <span className="text-ink-300">{totalInspections}</span> inspection results
-                  </p>
+            <div className="border-b border-line bg-ink-950/40 px-4 sm:px-5 py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                {/* Logo + info */}
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logoyj.jpeg"
+                    alt="Company logo"
+                    className="h-10 w-10 sm:h-14 sm:w-14 rounded-xl border border-line bg-white object-contain p-1 shrink-0"
+                    draggable={false}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base sm:text-lg font-bold tracking-tight text-ink-100">Inspection Result Report</h3>
+                    <p className="text-xs text-ink-400 mt-0.5">
+                      <span className="font-semibold text-ember-500">{entityLabel}</span>
+                      <span className="text-ink-500 mx-1.5">·</span>
+                      <span className="font-semibold text-ink-200">{facilityLabel}</span>
+                    </p>
+                    <p className="text-[11px] text-ink-500 mt-0.5">
+                      Period: <span className="text-ink-300">{periodText}</span> ·{' '}
+                      <span className="text-ink-300">{totalInspections}</span> inspection results
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-end gap-3 shrink-0">
-                  <div className="flex flex-col items-end gap-1">
+                {/* Health score + print */}
+                <div className="flex flex-wrap items-center sm:items-end gap-2 sm:gap-3 shrink-0">
+                  <div className="flex flex-col items-start sm:items-end gap-1">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${healthScore >= 80 ? 'tone-emerald' : 'tone-amber'}`}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                       {healthScore}% Pass Rate
                     </span>
-                    <span className="text-[11px] text-ink-500">
+                    <span className="text-[10px] sm:text-[11px] text-ink-500 leading-tight">
                       {safeCount} PASS · {resolvedCount} Resolved · {inProgressCount} In Progress · {openCount} Needs Action
                     </span>
                   </div>
@@ -1040,19 +1067,20 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* ── Report table with inspection photos ── */}
-            <div className="overflow-x-auto">
+            {/* ── Report table with inspection photos & CAPA tracking ── */}
+            <div className="overflow-x-auto w-full">
+              {/* Desktop table — hidden on mobile, card layout below handles small screens */}
               <table className="mobile-cards w-full text-left">
-                <thead>
+                <thead className="hidden md:table-header-group">
                   <tr className="border-b border-line bg-ink-950/40">
-                    <th className="th">Photo</th>
-                    <th className="th">Equipment ID</th>
-                    <th className="th">Type</th>
-                    <th className="th">Entity / Facility</th>
-                    <th className="th">Date / Period</th>
-                    <th className="th">Inspector</th>
-                    <th className="th">Status</th>
-                    <th className="th">Remarks</th>
+                    <th className="th w-[115px] shrink-0">Photo</th>
+                    <th className="th w-[105px]">Equipment ID</th>
+                    <th className="th w-[120px]">Type</th>
+                    <th className="th w-[130px]">Entity / Facility</th>
+                    <th className="th w-[115px]">Date / Period</th>
+                    <th className="th w-[105px]">Inspector</th>
+                    <th className="th w-[135px]">Status / CAPA</th>
+                    <th className="th min-w-[240px]">Findings &amp; Corrective Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -1061,79 +1089,119 @@ export default function ReportsPage() {
                     const facility = item.equipment?.facility ?? '';
                     const photos = (item.photo_url || '').split(',').map((p) => p.trim()).filter(Boolean);
                     const isPass = item.status === 'PASS';
+                    const improvement = improvementsMap.get(item.id);
+                    const beforePhoto = photos.length > 0 ? photos[0] : (improvement?.before_photo_url || null);
+                    const afterPhoto = improvement?.after_photo_url || null;
+
                     return (
                       <tr
                         key={item.id}
                         onClick={() => setViewingRecord(item)}
                         className={`transition-colors cursor-pointer hover:bg-ink-700/10`}
                       >
-                        <td data-label="Photo" className="td">
-                          {photos.length > 0 ? (
-                            <ProtectedImage
-                              src={photos[0]}
-                              alt={`${item.equipment_no_id} inspection photo`}
-                              onPreview={() => setViewingRecord(item)}
-                              className="h-12 w-16 rounded-lg border border-line object-cover"
-                            />
-                          ) : (
-                            <span className="inline-flex h-12 w-16 items-center justify-center rounded-lg border border-line bg-ink-850 text-ink-600">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                <rect x="3" y="3" width="18" height="18" rx="2" />
-                                <circle cx="9" cy="9" r="2" />
-                                <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
-                              </svg>
-                            </span>
-                          )}
+                        <td data-label="Photo" className="td align-top">
+                          <div className="flex items-center gap-1.5">
+                            {beforePhoto ? (
+                              <div className="relative group shrink-0">
+                                <ProtectedImage
+                                  src={beforePhoto}
+                                  alt={`${item.equipment_no_id} inspection photo`}
+                                  onPreview={() => setViewingRecord(item)}
+                                  className="h-11 w-12 rounded-lg border border-line object-cover"
+                                />
+                                {afterPhoto && (
+                                  <span className="absolute -bottom-1 -left-1 bg-rose-950/90 text-rose-300 border border-rose-800 text-[8px] font-bold px-1 rounded">
+                                    Before
+                                  </span>
+                                )}
+                              </div>
+                            ) : !afterPhoto ? (
+                              <span className="inline-flex h-11 w-12 items-center justify-center rounded-lg border border-line bg-ink-850 text-ink-600 shrink-0">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                                  <circle cx="9" cy="9" r="2" />
+                                  <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+                                </svg>
+                              </span>
+                            ) : null}
+
+                            {afterPhoto && (
+                              <div className="relative group shrink-0">
+                                <ProtectedImage
+                                  src={afterPhoto}
+                                  alt={`${item.equipment_no_id} fixed photo`}
+                                  onPreview={() => setViewingRecord(item)}
+                                  className="h-11 w-12 rounded-lg border border-emerald-500/50 object-cover"
+                                />
+                                <span className="absolute -bottom-1 -right-1 bg-emerald-950/90 text-emerald-300 border border-emerald-800 text-[8px] font-bold px-1 rounded">
+                                  Fixed
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </td>
-                                                <td data-label="Equipment ID" className={`td font-bold ${isPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <td data-label="Equipment ID" className={`td font-bold align-top ${isPass ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {item.equipment_no_id}
                         </td>
-                        <td data-label="Type" className="td">
-                          <span className={`inline-flex items-center rounded-lg border px-2 py-1 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
+                        <td data-label="Type" className="td align-top">
+                          <span className={`inline-flex items-center rounded-lg border px-2 py-0.5 text-xs font-medium ${getTypeBadgeColor(item.equipment_type)}`}>
                             {item.equipment_type}
                           </span>
                         </td>
-                        <td data-label="Entity / Facility" className="td text-xs">
+                        <td data-label="Entity / Facility" className="td text-xs align-top">
                           {entity && <div className="text-ink-200 font-medium">{entity}</div>}
                           {facility && <div className="text-ink-500 text-[11px]">{facility}</div>}
                           {!entity && !facility && <span className="text-ink-600 italic">—</span>}
                         </td>
-                        <td data-label="Date / Period" className="td text-xs text-ink-300">
+                        <td data-label="Date / Period" className="td text-xs text-ink-300 align-top">
                           <div>{item.inspection_date}</div>
                           <div className="text-ink-500 text-[11px]">{item.week} ({item.month_year})</div>
                         </td>
-                        <td data-label="Inspector" className="td text-xs text-ink-200">{item.inspector_name}</td>
-                        <td data-label="Status" className="td">
+                        <td data-label="Inspector" className="td text-xs text-ink-200 align-top">
+                          {item.inspector_name}
+                        </td>
+                        <td data-label="Status / CAPA" className="td align-top">
                           {(() => {
-                            const improvement = improvementsMap.get(item.id);
                             if (!isPass) {
                               const capaStatus = improvement?.status || 'OPEN';
                               const capaResolved = capaStatus === 'RESOLVED';
                               const capaInProgress = capaStatus === 'IN_PROGRESS';
                               return (
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                                  capaResolved ? 'tone-emerald' : capaInProgress ? 'tone-amber' : 'tone-rose'
-                                }`}>
-                                  {capaResolved ? (
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                  ) : capaInProgress ? (
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                                    </svg>
-                                  ) : (
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                                    </svg>
-                                  )}
-                                  {capaStatus}
-                                </span>
+                                <div className="flex flex-col gap-1.5 items-start md:items-start">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                                    capaResolved ? 'tone-emerald' : capaInProgress ? 'tone-amber' : 'tone-rose'
+                                  }`}>
+                                    {capaResolved ? (
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    ) : capaInProgress ? (
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                                      </svg>
+                                    ) : (
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                        <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                      </svg>
+                                    )}
+                                    {capaStatus}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveImprovementInspection(item);
+                                      setActiveExistingImprovement(improvement || null);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-ink-800 hover:bg-ink-700 text-[10px] text-ink-200 border border-line font-medium shrink-0"
+                                  >
+                                    {improvement ? 'Edit CAPA' : '+ Log Fix'}
+                                  </button>
+                                </div>
                               );
                             }
                             return (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border tone-emerald">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border tone-emerald whitespace-nowrap">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <polyline points="20 6 9 17 4 12" />
                                 </svg>
@@ -1142,8 +1210,41 @@ export default function ReportsPage() {
                             );
                           })()}
                         </td>
-                        <td data-label="Remarks" className="td text-xs text-ink-400 max-w-[200px] truncate">
-                          {item.remarks || <span className="italic text-ink-600">No remarks</span>}
+                        <td data-label="Findings & Actions" className="td text-xs text-ink-400 align-top">
+                          <div className="leading-snug">
+                            {item.remarks ? (
+                              <span className="text-ink-200">{item.remarks}</span>
+                            ) : (
+                              <span className="italic text-ink-600">No remarks</span>
+                            )}
+                          </div>
+                          {improvement && (
+                            <div className="mt-1.5 p-2 rounded-lg bg-ink-950/70 border border-line text-[11px] text-ink-300 space-y-1">
+                              {(improvement.action_taken || improvement.action_plan) && (
+                                <div className="break-words leading-tight">
+                                  <strong className="text-ink-400">Action: </strong>
+                                  <span className="text-ink-200">{improvement.action_taken || improvement.action_plan}</span>
+                                </div>
+                              )}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-ink-400 text-[10px] pt-0.5">
+                                {improvement.pic_name && (
+                                  <div>
+                                    <strong className="text-ink-400">PIC: </strong>
+                                    <span className="text-ink-300">{improvement.pic_name}</span>
+                                  </div>
+                                )}
+                                {improvement.completion_date ? (
+                                  <div className="text-emerald-400 font-medium">
+                                    Done: {improvement.completion_date}
+                                  </div>
+                                ) : improvement.target_date ? (
+                                  <div className="text-amber-400">
+                                    Target: {improvement.target_date}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1165,11 +1266,11 @@ export default function ReportsPage() {
 
   return (
     <>
-      <div className="p-4 md:p-8">
+      <div className="p-3 sm:p-4 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
 
           {/* ── Header ── */}
-          <div className="panel p-5 md:p-6 space-y-4">
+          <div className="panel p-3 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-ink-100">Inspection Reports</h1>
@@ -1177,7 +1278,7 @@ export default function ReportsPage() {
                   Monitor safety conditions and track equipment coverage within inspection periods.
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {lastFetched && (
                   <span className="text-[11px] text-ink-600 hidden md:block">
                     Updated {lastFetched.toLocaleTimeString()}
@@ -1213,8 +1314,8 @@ export default function ReportsPage() {
             </div>
 
             {/* Filter row — row 1: search, entity, facility, type */}
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[140px]">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
+              <div className="col-span-2 sm:col-span-1 sm:flex-1 sm:min-w-[140px]">
                 <label className="field-label text-[10px]">Search</label>
                 <input
                   type="text" value={searchQuery}
@@ -1224,7 +1325,7 @@ export default function ReportsPage() {
                 />
               </div>
 
-              <div className="flex-1 min-w-[120px]">
+              <div className="sm:flex-1 sm:min-w-[120px]">
                 <label className="field-label text-[10px]">Entity</label>
                 <select value={selectedEntity} onChange={(e) => { setSelectedEntity(e.target.value); setSelectedFacility('All'); }} className="input text-xs">
                   {uniqueEntities.map(e => <option key={e} value={e}>{e === 'All' ? 'All Entities' : e}</option>)}
@@ -1248,10 +1349,10 @@ export default function ReportsPage() {
             </div>
 
             {/* Filter row 2: period (month then week) */}
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-end gap-2 sm:gap-3">
               <div>
                 <label className="field-label text-[10px]">Month</label>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-40">
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="input text-xs w-full sm:w-40">
                   <option value="">All Months</option>
                   {monthOptions.map((m) => (
                     <option key={m} value={m}>{formatMonthYear(m)}</option>
@@ -1264,7 +1365,7 @@ export default function ReportsPage() {
                   value={selectedWeek}
                   onChange={(e) => setSelectedWeek(e.target.value)}
                   disabled={!selectedMonth}
-                  className="input text-xs w-36"
+                  className="input text-xs w-full sm:w-36"
                 >
                   <option value="">All Weeks</option>
                   {weekOptions.map((w) => (
@@ -1287,7 +1388,7 @@ export default function ReportsPage() {
 
           {/* ── KPI Cards ── */}
           {hasPeriodFilter ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4">
               <KpiCard label="Total Inspections" value={totalInspections} sub="In selected filters" color="text-ink-100" />
               <KpiCard label="Needs Attention"  value={openCount} sub="OPEN · needs action" color="text-rose-400" borderColor="border-rose-900/30" />
               <KpiCard
@@ -1331,10 +1432,10 @@ export default function ReportsPage() {
           {/* ── Tabbed Table ── */}
           <div className="panel overflow-hidden p-0">
             {/* Tab bar */}
-            <div className="flex overflow-x-auto border-b border-line bg-ink-950/40">
+            <div className="flex overflow-x-auto border-b border-line bg-ink-950/40 scrollbar-none">
               <button
                 onClick={() => setActiveTab('uninspected')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 sm:py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'uninspected' ? 'border-amber-500 text-amber-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
@@ -1349,7 +1450,7 @@ export default function ReportsPage() {
 
               <button
                 onClick={() => setActiveTab('unsafe')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 sm:py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'unsafe' ? 'border-rose-500 text-rose-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
@@ -1365,7 +1466,7 @@ export default function ReportsPage() {
 
               <button
                 onClick={() => setActiveTab('safe')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 sm:py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'safe' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
@@ -1381,7 +1482,7 @@ export default function ReportsPage() {
 
               <button
                 onClick={() => setActiveTab('report')}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 sm:py-3.5 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
                   activeTab === 'report' ? 'border-sky-500 text-sky-400' : 'border-transparent text-ink-500 hover:text-ink-300'
                 }`}
               >
@@ -1397,7 +1498,7 @@ export default function ReportsPage() {
               </button>
             </div>
 
-            <div className={`px-5 py-3 text-xs font-semibold uppercase tracking-wider border-b border-line bg-ink-700/10 ${
+            <div className={`px-3 sm:px-5 py-2.5 sm:py-3 text-[11px] sm:text-xs font-semibold uppercase tracking-wider border-b border-line bg-ink-700/10 ${
               activeTab === 'uninspected'
                 ? 'text-amber-400'
                 : activeTab === 'unsafe'

@@ -205,14 +205,14 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
     <div className={`fixed inset-0 z-50 overflow-y-auto p-4 md:p-6 ${T.overlay} flex justify-center items-start animate-fade`}>
       <div className={`relative w-full max-w-4xl ${T.surface} rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col my-auto sm:my-8`}>
         {/* Header */}
-        <div className={`p-6 border-b flex items-center justify-between ${T.header} shrink-0`}>
-          <div className="flex items-center gap-3">
-            <span className={`text-xl font-bold ${T.headerText}`}>{inspection.equipment_no_id}</span>
-            <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${T.typePill}`}>
+        <div className={`p-4 sm:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${T.header} shrink-0`}>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <span className={`text-lg sm:text-xl font-bold ${T.headerText}`}>{inspection.equipment_no_id}</span>
+            <span className={`text-[11px] sm:text-xs px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border font-medium ${T.typePill}`}>
               {inspection.equipment_type}
             </span>
             <span
-              className={`text-xs px-3 py-1 rounded-full font-bold border ${
+              className={`text-[11px] sm:text-xs px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full font-bold border ${
                 inspection.status === 'PASS' ? T.statusPass : T.statusFail
               }`}
             >
@@ -220,7 +220,7 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {userRole === 'admin' && onEdit && (
               <button
                 onClick={() => {
@@ -251,9 +251,9 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
         </div>
 
         {/* Modal Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1">
           {/* Metadata Grid */}
-          <div className={`grid grid-cols-2 md:grid-cols-5 gap-4 p-4 rounded-2xl border text-xs ${T.metaCard}`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border text-xs ${T.metaCard}`}>
             <div>
               <span className={`${T.metaLabel} block uppercase font-semibold text-[10px]`}>Inspector</span>
               <span className={`${T.metaValue} font-medium`}>{inspection.inspector_name}</span>

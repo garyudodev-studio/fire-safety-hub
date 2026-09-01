@@ -19,6 +19,18 @@ export interface ReportPrintRecord {
     area?: string | null;
     location?: string | null;
   } | null;
+  improvement?: {
+    id?: string;
+    issue_description?: string | null;
+    action_plan?: string | null;
+    action_taken?: string | null;
+    pic_name?: string | null;
+    target_date?: string | null;
+    completion_date?: string | null;
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | string;
+    before_photo_url?: string | null;
+    after_photo_url?: string | null;
+  } | null;
 }
 
 export interface ResultReportPrintOptions {
@@ -28,7 +40,11 @@ export interface ResultReportPrintOptions {
   period: string;
   safeCount: number;
   unsafeCount: number;
+  resolvedCount?: number;
+  inProgressCount?: number;
+  openCount?: number;
   passRate: number;
+  healthScore?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -64,7 +80,7 @@ function formatReportDate(d: Date): string {
 }
 
 function absolutizePaths(html: string): string {
-  const origin = window.location.origin;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return html.replace(/(src|href)="\/(?!\/)/g, `$1="${origin}/`);
 }
 
@@ -74,7 +90,7 @@ const PAGE_STYLES = `
 <style>
   @page {
     size: A4 landscape;
-    margin: 8mm 9mm 12mm;
+    margin: 8mm 9mm 10mm;
     @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
       font-size: 8px;
@@ -82,7 +98,7 @@ const PAGE_STYLES = `
       font-family: Arial, sans-serif;
     }
     @bottom-left {
-      content: "PT YONGJIN JAVASUKA GARMENT — Inspection Result Report";
+      content: "PT YONGJIN JAVASUKA GARMENT — Inspection & CAPA Result Report";
       font-size: 8px;
       color: #94a3b8;
       font-family: Arial, sans-serif;
@@ -90,20 +106,20 @@ const PAGE_STYLES = `
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; }
-  body { background: #e5e7eb; padding: 24px; }
+  body { background: #e5e7eb; padding: 20px; }
 
   .page {
     background: #ffffff;
     width: 279mm;
     min-height: 190mm;
     margin: 0 auto;
-    padding: 10mm 11mm;
+    padding: 9mm 10mm;
     box-shadow: 0 12px 40px rgba(15, 23, 42, 0.22);
     border-radius: 6px;
   }
   .no-break { page-break-inside: avoid; }
 
-  /* ══ Cool header — dark navy gradient + ember accent ══ */
+  /* ══ Header — dark navy gradient + ember accent ══ */
   .report-header {
     position: relative;
     display: flex;
@@ -157,7 +173,7 @@ const PAGE_STYLES = `
     color: #ffd9c9;
   }
   .report-title {
-    font-size: 23px;
+    font-size: 21px;
     font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -206,69 +222,84 @@ const PAGE_STYLES = `
   .meta-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 7px;
+    margin-top: 10px;
   }
   .meta-box {
     flex: 1 1 0;
-    min-width: 125px;
+    min-width: 105px;
     border: 1px solid #e2e8f0;
     border-left: 4px solid #94a3b8;
     border-radius: 8px;
-    padding: 7px 11px;
+    padding: 6px 9px;
     background: #f8fafc;
   }
   .meta-box .meta-label {
-    font-size: 8px;
+    font-size: 7.5px;
     font-weight: 700;
-    letter-spacing: 0.12em;
-    color: #94a3b8;
+    letter-spacing: 0.1em;
+    color: #64748b;
     text-transform: uppercase;
   }
   .meta-box .meta-value {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
     color: #0f172a;
-    margin-top: 3px;
+    margin-top: 2px;
   }
-  .meta-box.accent { border-left-color: #dc2626; background: #fef2f2; }
-  .meta-box.accent .meta-value { color: #b91c1c; }
+  .meta-box.accent { border-left-color: #e11d48; background: #fff1f2; }
+  .meta-box.accent .meta-value { color: #be123c; }
   .meta-box.green { border-left-color: #16a34a; background: #f0fdf4; }
   .meta-box.green .meta-value { color: #15803d; }
   .meta-box.amber { border-left-color: #d97706; background: #fffbeb; }
   .meta-box.amber .meta-value { color: #b45309; }
   .meta-box.sky { border-left-color: #0284c7; background: #f0f9ff; }
   .meta-box.sky .meta-value { color: #0369a1; }
+  .meta-box.emerald { border-left-color: #059669; background: #ecfdf5; }
+  .meta-box.emerald .meta-value { color: #047857; }
 
   /* ── Table ── */
   table.report-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 12px;
-    font-size: 9px;
+    margin-top: 10px;
+    font-size: 8.5px;
   }
   table.report-table thead th {
     background: linear-gradient(90deg, #16233f, #1f3461);
     color: #ffffff;
-    padding: 7px 8px;
+    padding: 6px 7px;
     text-align: left;
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     border: 1px solid #16233f;
   }
   table.report-table tbody td {
-    padding: 5px 8px;
+    padding: 5px 7px;
     border: 1px solid #e2e8f0;
-    vertical-align: middle;
+    vertical-align: top;
     color: #374151;
   }
   table.report-table tbody tr:nth-child(even) { background: #f8fafc; }
   table.report-table tbody tr { page-break-inside: avoid; }
   table.report-table thead { display: table-header-group; }
-  .photo-cell img {
-    width: 46px;
+
+  /* Photos */
+  .photos-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .photo-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .photo-box img {
+    width: 44px;
     height: 34px;
     object-fit: cover;
     border-radius: 4px;
@@ -276,74 +307,134 @@ const PAGE_STYLES = `
     display: block;
     background: #f1f5f9;
   }
+  .photo-tag {
+    font-size: 6.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+  .photo-tag.before { background: #fee2e2; color: #b91c1c; }
+  .photo-tag.after  { background: #dcfce7; color: #15803d; }
   .photo-empty {
-    width: 46px;
+    width: 44px;
     height: 34px;
     border-radius: 4px;
     border: 1px dashed #cbd5e1;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #cbd5e1;
-    font-size: 7px;
+    color: #94a3b8;
+    font-size: 6.5px;
+    text-align: center;
+    line-height: 1.1;
     background: #f8fafc;
   }
-  .status-pass {
+
+  /* Status Badges */
+  .badge {
     display: inline-block;
-    padding: 2px 9px;
+    padding: 2px 7px;
     border-radius: 999px;
-    font-size: 8px;
+    font-size: 7.5px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .status-pass {
     background: #dcfce7;
     color: #15803d;
     border: 1px solid #86efac;
-    white-space: nowrap;
   }
-  .status-fail {
-    display: inline-block;
-    padding: 2px 9px;
-    border-radius: 999px;
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    background: #fee2e2;
-    color: #b91c1c;
-    border: 1px solid #fca5a5;
-    white-space: nowrap;
+  .status-resolved {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #6ee7b7;
   }
+  .status-in-progress {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+  }
+  .status-open {
+    background: #fff1f2;
+    color: #be123c;
+    border: 1px solid #fecdd3;
+  }
+
   .type-chip {
     display: inline-block;
-    padding: 2px 7px;
+    padding: 2px 6px;
     border-radius: 4px;
-    font-size: 8px;
+    font-size: 7.5px;
     font-weight: 700;
     color: #ffffff;
     white-space: nowrap;
   }
-  .id-cell { font-weight: 700; color: #0f172a; font-family: "Courier New", monospace; font-size: 10px; }
-  .dim { color: #64748b; font-size: 8px; }
-  .remarks-cell { max-width: 150px; word-break: break-word; }
+  .id-cell { font-weight: 700; color: #0f172a; font-family: "Courier New", monospace; font-size: 9.5px; }
+  .dim { color: #64748b; font-size: 7.5px; }
+  
+  /* Remarks and CAPA block */
+  .remarks-block { font-size: 8px; line-height: 1.35; color: #334155; }
+  .capa-box {
+    margin-top: 4px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    border-left: 3px solid #0284c7;
+    font-size: 7.5px;
+    line-height: 1.3;
+  }
+  .capa-box.resolved {
+    background: #f0fdf4;
+    border-left-color: #10b981;
+  }
+  .capa-box.in-progress {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+  }
+  .capa-box.open {
+    background: #fff1f2;
+    border-left-color: #f43f5e;
+  }
+  .capa-box .capa-header {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .capa-box.resolved .capa-header { color: #047857; }
+  .capa-box.in-progress .capa-header { color: #b45309; }
+  .capa-box.open .capa-header { color: #be123c; }
 
   /* ── Footer ── */
   .report-footer {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: 20px;
-    margin-top: 18px;
-    padding-top: 10px;
+    gap: 16px;
+    margin-top: 14px;
+    padding-top: 8px;
     border-top: 1px solid #cbd5e1;
   }
-  .report-footer .note { font-size: 8px; color: #64748b; max-width: 55%; line-height: 1.5; }
-  .signature-block { text-align: center; font-size: 9px; color: #475569; flex-shrink: 0; }
-  .signature-block .sig-space { height: 54px; }
-  .signature-block .sig-line { border-bottom: 1px solid #475569; width: 160px; margin: 0 auto 4px; }
-  .signature-block b { font-size: 10px; color: #0f172a; display: block; }
+  .report-footer .note { font-size: 7.5px; color: #64748b; max-width: 50%; line-height: 1.4; }
+  .signatures-wrap {
+    display: flex;
+    gap: 24px;
+  }
+  .signature-block { text-align: center; font-size: 8px; color: #475569; flex-shrink: 0; min-width: 130px; }
+  .signature-block .sig-space { height: 44px; }
+  .signature-block .sig-line { border-bottom: 1px solid #475569; width: 130px; margin: 0 auto 3px; }
+  .signature-block b { font-size: 9px; color: #0f172a; display: block; }
 
   @media print {
     @page {
-      margin: 8mm 9mm 12mm;
+      margin: 8mm 9mm 10mm;
     }
     html, body {
       background: #ffffff !important;
@@ -367,35 +458,108 @@ const PAGE_STYLES = `
 </head>`;
 
 function buildReportHtml(options: ResultReportPrintOptions): string {
-  const { records, entity, facility, period, safeCount, unsafeCount, passRate } = options;
+  const {
+    records,
+    entity,
+    facility,
+    period,
+    safeCount,
+    unsafeCount,
+    resolvedCount = 0,
+    inProgressCount = 0,
+    openCount = 0,
+    passRate,
+    healthScore = passRate,
+  } = options;
+
   const generatedAt = formatReportDate(new Date());
   const total = records.length;
 
   const rowsHtml = records.map((r, idx) => {
     const isPass = r.status === 'PASS';
-    const entity = r.equipment?.entity ?? '';
-    const facility = r.equipment?.facility ?? '';
-    const photos = (r.photo_url || '').split(',').map((p) => p.trim()).filter(Boolean);
+    const eqEntity = r.equipment?.entity ?? '';
+    const eqFacility = r.equipment?.facility ?? '';
+    const eqLocation = [r.equipment?.area, r.equipment?.location].filter(Boolean).join(' · ');
     const typeColor = getTypeBadgeStyle(r.equipment_type);
 
-    const photoHtml = photos.length > 0
-      ? `<div class="photo-cell"><img src="${escapeHtml(photos[0])}" /></div>`
-      : `<div class="photo-empty">NO<br/>PHOTO</div>`;
+    const photos = (r.photo_url || '').split(',').map((p) => p.trim()).filter(Boolean);
+    const beforePhoto = photos.length > 0 ? photos[0] : (r.improvement?.before_photo_url || null);
+    const afterPhoto = r.improvement?.after_photo_url || null;
 
-    const statusHtml = isPass
-      ? `<span class="status-pass">&#10004; PASS</span>`
-      : `<span class="status-fail">&#9888; NEEDS<br/>ATTENTION</span>`;
+    // Photos HTML (Before / After)
+    let photoHtml = '';
+    if (beforePhoto || afterPhoto) {
+      photoHtml = `<div class="photos-container">`;
+      if (beforePhoto) {
+        photoHtml += `<div class="photo-box"><img src="${escapeHtml(beforePhoto)}" />${afterPhoto ? '<span class="photo-tag before">Before</span>' : ''}</div>`;
+      }
+      if (afterPhoto) {
+        photoHtml += `<div class="photo-box"><img src="${escapeHtml(afterPhoto)}" /><span class="photo-tag after">Fixed</span></div>`;
+      }
+      photoHtml += `</div>`;
+    } else {
+      photoHtml = `<div class="photo-empty">NO<br/>PHOTO</div>`;
+    }
+
+    // Status Badge & CAPA details
+    const imp = r.improvement;
+    let statusHtml = '';
+    let capaBlock = '';
+
+    if (isPass) {
+      statusHtml = `<span class="badge status-pass">&#10004; PASS</span>`;
+    } else {
+      const impStatus = imp?.status || 'OPEN';
+      if (impStatus === 'RESOLVED') {
+        statusHtml = `<span class="badge status-resolved">&#10004; RESOLVED (CAPA)</span>`;
+      } else if (impStatus === 'IN_PROGRESS') {
+        statusHtml = `<span class="badge status-in-progress">&#9203; IN PROGRESS (CAPA)</span>`;
+      } else {
+        statusHtml = `<span class="badge status-open">&#9888; OPEN (Needs Action)</span>`;
+      }
+
+      // Build structured CAPA info box
+      const actionText = imp?.action_taken || imp?.action_plan || r.action_taken || '';
+      const picText = imp?.pic_name || '';
+      const dateText = imp?.completion_date ? `Completed: ${imp.completion_date}` : imp?.target_date ? `Target: ${imp.target_date}` : '';
+      const themeClass = impStatus === 'RESOLVED' ? 'resolved' : impStatus === 'IN_PROGRESS' ? 'in-progress' : 'open';
+
+      if (actionText || picText || dateText) {
+        capaBlock = `
+          <div class="capa-box ${themeClass}">
+            <div class="capa-header">
+              <span>CAPA Follow-up [${escapeHtml(impStatus)}]</span>
+              ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
+            </div>
+            ${actionText ? `<div><b>Action:</b> ${escapeHtml(actionText)}</div>` : ''}
+            ${picText ? `<div><b>PIC:</b> ${escapeHtml(picText)}</div>` : ''}
+          </div>
+        `;
+      }
+    }
+
+    const remarksText = r.remarks ? escapeHtml(r.remarks) : (isPass ? '<span class="dim">Normal condition</span>' : '<span class="dim">No defect remarks</span>');
 
     return `<tr>
-      <td class="dim">${idx + 1}</td>
-      <td>${photoHtml}</td>
-      <td class="id-cell">${escapeHtml(r.equipment_no_id)}</td>
-      <td><span class="type-chip" style="background:${typeColor}">${escapeHtml(r.equipment_type)}</span></td>
-      <td>${entity ? escapeHtml(entity) : '<span class="dim">—</span>'}<br/><span class="dim">${facility ? escapeHtml(facility) : '—'}</span></td>
-      <td>${escapeHtml(r.inspection_date)}<br/><span class="dim">${escapeHtml(r.week)} (${escapeHtml(r.month_year)})</span></td>
-      <td>${escapeHtml(r.inspector_name)}</td>
-      <td>${statusHtml}</td>
-      <td class="remarks-cell">${r.remarks ? escapeHtml(r.remarks) : '<span class="dim">—</span>'}</td>
+      <td class="dim" style="width:20px; text-align:center">${idx + 1}</td>
+      <td style="width:95px">${photoHtml}</td>
+      <td class="id-cell" style="width:85px">${escapeHtml(r.equipment_no_id)}</td>
+      <td style="width:95px"><span class="type-chip" style="background:${typeColor}">${escapeHtml(r.equipment_type)}</span></td>
+      <td style="width:115px">
+        <b>${eqEntity ? escapeHtml(eqEntity) : '—'}</b><br/>
+        <span class="dim">${eqFacility ? escapeHtml(eqFacility) : '—'}</span>
+        ${eqLocation ? `<div class="dim" style="margin-top:2px">${escapeHtml(eqLocation)}</div>` : ''}
+      </td>
+      <td style="width:95px">
+        <b>${escapeHtml(r.inspection_date)}</b><br/>
+        <span class="dim">${escapeHtml(r.week)} (${escapeHtml(r.month_year)})</span>
+      </td>
+      <td style="width:80px">${escapeHtml(r.inspector_name)}</td>
+      <td style="width:105px; text-align:center">${statusHtml}</td>
+      <td>
+        <div class="remarks-block">${remarksText}</div>
+        ${capaBlock}
+      </td>
     </tr>`;
   }).join('\n');
 
@@ -403,7 +567,7 @@ function buildReportHtml(options: ResultReportPrintOptions): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Inspection Result Report</title>
+<title>Inspection &amp; CAPA Result Report</title>
 ${PAGE_STYLES}
 <body>
   <div class="page">
@@ -413,14 +577,14 @@ ${PAGE_STYLES}
       </div>
       <div class="report-title-block">
         <div class="report-company">PT YONGJIN JAVASUKA GARMENT</div>
-        <div class="report-title">Inspection Result Report</div>
-        <div class="report-subtitle">Fire Protection Equipment Inspection — Summary of Inspection Results</div>
+        <div class="report-title">Inspection &amp; CAPA Result Report</div>
+        <div class="report-subtitle">Fire Protection Equipment Inspection — Summary of Inspection Results &amp; Corrective Actions (CAPA)</div>
       </div>
       <div class="report-docno">
         <div class="docno-label">Document No.</div>
         <div class="docno-value">YJ-F.HSE.0038</div>
         <div class="docno-row">Issued: <b>${generatedAt}</b></div>
-        <div class="docno-row">Revision: <b>00</b></div>
+        <div class="docno-row">Revision: <b>01 (CAPA)</b></div>
       </div>
     </div>
 
@@ -439,34 +603,42 @@ ${PAGE_STYLES}
       </div>
       <div class="meta-box">
         <div class="meta-label">Total Inspected</div>
-        <div class="meta-value">${total} Equipment</div>
+        <div class="meta-value">${total} Items</div>
       </div>
       <div class="meta-box green">
         <div class="meta-label">Pass (Safe)</div>
         <div class="meta-value">${safeCount} Items</div>
       </div>
-      <div class="meta-box accent">
-        <div class="meta-label">Needs Attention</div>
-        <div class="meta-value">${unsafeCount} Items</div>
+      <div class="meta-box emerald">
+        <div class="meta-label">CAPA Resolved</div>
+        <div class="meta-value">${resolvedCount} Fixed</div>
       </div>
       <div class="meta-box amber">
+        <div class="meta-label">CAPA In Progress</div>
+        <div class="meta-value">${inProgressCount} Ongoing</div>
+      </div>
+      <div class="meta-box accent">
+        <div class="meta-label">Needs Action (Open)</div>
+        <div class="meta-value">${openCount} Open</div>
+      </div>
+      <div class="meta-box emerald">
         <div class="meta-label">Health Score</div>
-        <div class="meta-value">${passRate}%</div>
+        <div class="meta-value">${healthScore}%</div>
       </div>
     </div>
 
     <table class="report-table">
       <thead>
         <tr>
-          <th style="width:22px">#</th>
-          <th>Photo</th>
-          <th>Equipment ID</th>
-          <th>Type</th>
-          <th>Entity / Facility</th>
-          <th>Date / Period</th>
-          <th>Inspector</th>
-          <th>Status</th>
-          <th>Remarks</th>
+          <th style="width:20px; text-align:center">#</th>
+          <th style="width:95px">Photo</th>
+          <th style="width:85px">Equipment ID</th>
+          <th style="width:95px">Type</th>
+          <th style="width:115px">Location</th>
+          <th style="width:95px">Date / Period</th>
+          <th style="width:80px">Inspector</th>
+          <th style="width:105px; text-align:center">Status / CAPA</th>
+          <th>Findings &amp; Corrective Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -476,15 +648,21 @@ ${rowsHtml}
 
     <div class="report-footer">
       <div class="note">
-        This report was generated from the fire protection inspection system.
-        All equipment inspections follow the applicable fire safety checklist (HSE) and
-        visual condition standards. Results marked NEEDS ATTENTION require follow-up action.
+        This report is generated from the Fire Protection Inspection &amp; Safety Hub. All equipment inspections follow HSE standards and regulatory compliance requirements. Corrective and Preventive Actions (CAPA) are logged, verified, and monitored until closure.
       </div>
-      <div class="signature-block">
-        <div class="sig-space"></div>
-        <div class="sig-line"></div>
-        <b>Prepared &amp; Approved By</b>
-        <div>Safety Officer / HSE Dept.</div>
+      <div class="signatures-wrap">
+        <div class="signature-block">
+          <div class="sig-space"></div>
+          <div class="sig-line"></div>
+          <b>Inspector / Safety Officer</b>
+          <div>Prepared By (HSE)</div>
+        </div>
+        <div class="signature-block">
+          <div class="sig-space"></div>
+          <div class="sig-line"></div>
+          <b>HSE Head / Factory Head</b>
+          <div>Approved &amp; Acknowledged By</div>
+        </div>
       </div>
     </div>
   </div>
