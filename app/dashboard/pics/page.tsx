@@ -41,6 +41,10 @@ export default function PICDashboard() {
     const [alertModal, setAlertModal] = useState<AlertState | null>(null);
     const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
+    // Filter state
+    const [filterEntity, setFilterEntity] = useState('');
+    const [filterFacility, setFilterFacility] = useState('');
+
     // UI State for Sheet
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Pic | null>(null);
@@ -364,8 +368,63 @@ export default function PICDashboard() {
                         <p className="text-sm">Loading PICs…</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
-                        {pics.map((item) => (
+                    <>
+                        {/* Filter Bar */}
+                        <div className="panel mb-5 p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                                <div className="flex-1">
+                                    <label className="field-label text-[10px]">Filter by Entity</label>
+                                    <input
+                                        type="text"
+                                        value={filterEntity}
+                                        onChange={(e) => setFilterEntity(e.target.value)}
+                                        list="filter-entities-list"
+                                        placeholder="All Entities"
+                                        className="input text-xs"
+                                    />
+                                    <datalist id="filter-entities-list">
+                                        {uniqueEntities.map(e => <option key={e} value={e} />)}
+                                    </datalist>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="field-label text-[10px]">Filter by Facility</label>
+                                    <input
+                                        type="text"
+                                        value={filterFacility}
+                                        onChange={(e) => setFilterFacility(e.target.value)}
+                                        list="filter-facilities-list"
+                                        placeholder="All Facilities"
+                                        className="input text-xs"
+                                    />
+                                    <datalist id="filter-facilities-list">
+                                        {uniqueFacilities.map(f => <option key={f} value={f} />)}
+                                    </datalist>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setFilterEntity(''); setFilterFacility(''); }}
+                                        className="btn btn-ghost text-xs"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="mt-2 text-[10px] text-ink-500">
+                                Showing {pics.filter(p =>
+                                    (!filterEntity || (p.entity && p.entity.toLowerCase().includes(filterEntity.toLowerCase()))) &&
+                                    (!filterFacility || (p.facility && p.facility.toLowerCase().includes(filterFacility.toLowerCase())))
+                                ).length} of {pics.length} PICs
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+                            {pics
+                                .filter((item) =>
+                                    (!filterEntity || (item.entity && item.entity.toLowerCase().includes(filterEntity.toLowerCase()))) &&
+                                    (!filterFacility || (item.facility && item.facility.toLowerCase().includes(filterFacility.toLowerCase())))
+                                )
+                                .map((item) => (
                             <div key={item.id} className="panel flex flex-col items-center p-6 text-center transition-colors duration-200 hover:border-line-strong justify-between">
                                 <div className="flex flex-col items-center w-full">
                                     <div className="relative mb-3">
@@ -415,6 +474,18 @@ export default function PICDashboard() {
                                             />
                                         </div>
                                     )}
+
+                                    {/* Contact Card preview */}
+                                    {item.image_contact && (
+                                        <div className="mt-3 h-12 w-32 bg-white/5 border border-line rounded-lg p-1 flex items-center justify-center">
+                                            <ProtectedImage
+                                                src={item.image_contact}
+                                                alt="Contact Card"
+                                                onPreview={() => setPreviewImage({ url: item.image_contact!, title: `${item.name} - Contact Card` })}
+                                                className="h-full object-contain"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-6 flex flex-col gap-2 w-full pt-4 border-t border-line">
@@ -442,7 +513,8 @@ export default function PICDashboard() {
                                 </div>
                             </div>
                         ))}
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
 
@@ -529,6 +601,22 @@ export default function PICDashboard() {
                                         type="file"
                                         accept="image/*"
                                         onChange={(e) => setProfileFile(e.target.files?.[0] || null)}
+                                        className="input text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="field-label">Contact Card Image</label>
+                                    {editingItem?.image_contact && (
+                                        <div className="mb-2">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={editingItem.image_contact} alt="Contact Card" className="h-16 w-32 rounded border border-line object-cover" />
+                                        </div>
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => setContactFile(e.target.files?.[0] || null)}
                                         className="input text-xs"
                                     />
                                 </div>

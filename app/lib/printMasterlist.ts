@@ -41,6 +41,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '"');
 }
 
+function formatDateIndo(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 function getTypeBadgeStyle(type: string): string {
   switch (type) {
     case 'Fire Alarm':          return '#dc2626';
@@ -227,44 +235,230 @@ const PAGE_STYLES = `
   /* ── Table ── */
   table.report-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     margin-top: 12px;
     font-size: 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
   }
   table.report-table thead th {
-    background: linear-gradient(90deg, #16233f, #1f3461);
+    background: linear-gradient(135deg, #0d1526 0%, #1f3461 100%);
     color: #ffffff;
-    padding: 7px 8px;
+    padding: 9px 8px;
     text-align: left;
     font-size: 8.5px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    font-weight: 800;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    border: 1px solid #16233f;
+    border-bottom: 2px solid #e6463c;
+    border-right: 1px solid rgba(255,255,255,0.12);
+    position: relative;
+  }
+  table.report-table thead th:last-child { border-right: none; }
+  table.report-table thead th::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #e6463c, #f59e0b, #fbbf24);
   }
   table.report-table tbody td {
-    padding: 5px 8px;
-    border: 1px solid #e2e8f0;
+    padding: 7px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #f1f5f9;
     vertical-align: middle;
-    color: #374151;
+    color: #1f2937;
   }
+  table.report-table tbody td:last-child { border-right: none; }
   table.report-table tbody tr:nth-child(even) { background: #f8fafc; }
-  table.report-table tbody tr { page-break-inside: avoid; }
+  table.report-table tbody tr:nth-child(odd) { background: #ffffff; }
+  table.report-table tbody tr:hover { background: #fff7ed; }
+  table.report-table tbody tr:last-child td { border-bottom: none; }
+  table.report-table tbody tr { page-break-inside: avoid; transition: background 0.15s ease; }
   table.report-table thead { display: table-header-group; }
-  .id-cell { font-weight: 700; color: #0f172a; font-family: "Courier New", monospace; font-size: 10px; }
-  .dim { color: #64748b; font-size: 8px; }
-  .details-cell { max-width: 150px; word-break: break-word; }
-  .type-chip {
+
+  .row-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e0e7ef;
+    color: #475569;
+    font-weight: 800;
+    font-size: 9px;
+    font-family: "Courier New", monospace;
+  }
+  .id-cell {
+    font-weight: 800;
+    color: #0f172a;
+    font-family: "Courier New", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+  }
+  .id-cell .id-badge {
     display: inline-block;
-    padding: 2px 7px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  .dim { color: #64748b; font-size: 8px; }
+  .muted-text { color: #94a3b8; font-size: 8.5px; font-style: italic; }
+
+  /* Location stack */
+  .info-stack { line-height: 1.45; }
+  .info-stack .primary { font-weight: 700; color: #0f172a; font-size: 9.5px; }
+  .info-stack .secondary { color: #64748b; font-size: 8px; margin-top: 1px; }
+
+  /* Details cell — visual chips */
+  .details-cell { max-width: 170px; }
+  .detail-chips { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
     border-radius: 4px;
-    font-size: 8px;
-    font-weight: 700;
-    color: #ffffff;
+    font-size: 7.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    border: 1px solid transparent;
     white-space: nowrap;
   }
-  .expiry-soon { color: #b45309; font-weight: 700; }
-  .expiry-expired { color: #b91c1c; font-weight: 700; }
+  .chip.neutral { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+  .chip.info    { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .chip.warn    { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+  .chip.danger  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .chip.success { background: #ecfdf5; color: #047857; border-color: #bbf7d0; }
+  .chip.gray    { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+  .chip .chip-icon {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .chip .chip-icon.sky   { background: #0284c7; }
+  .chip .chip-icon.ember { background: #dc2626; }
+  .chip .chip-icon.amber { background: #f59e0b; }
+  .chip .chip-icon.gray  { background: #94a3b8; }
+
+  /* Type chip (left column) */
+  .type-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 14px;
+    font-size: 8px;
+    font-weight: 800;
+    color: #ffffff;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .type-chip .dot {
+    width: 5px; height: 5px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px rgba(255,255,255,0.3);
+  }
+
+  /* PIC mini-card */
+  .pic-mini {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1.2;
+  }
+  .pic-mini .pic-avatar {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d1526, #1f3461);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 800;
+    flex-shrink: 0;
+    border: 1px solid #cbd5e1;
+  }
+  .pic-mini .pic-name { font-weight: 700; color: #0f172a; font-size: 9px; }
+  .pic-mini .pic-role {
+    font-size: 7px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* Exit lamp symbol */
+  .exit-lamp-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .exit-lamp-symbol.installed {
+    background: #ecfdf5; color: #047857;
+    border: 1.5px solid #bbf7d0;
+  }
+  .exit-lamp-symbol.not-installed {
+    background: #fef2f2; color: #b91c1c;
+    border: 1.5px solid #fecaca;
+  }
+  .exit-lamp-symbol.not-working {
+    background: #fffbeb; color: #b45309;
+    border: 1.5px solid #fde68a;
+  }
+
+  /* Highlight expired rows */
+  tr.row-expired {
+    background: linear-gradient(90deg, #fef2f2 0%, #ffffff 70%) !important;
+  }
+  tr.row-expired:nth-child(even) {
+    background: linear-gradient(90deg, #fee2e2 0%, #f8fafc 70%) !important;
+  }
+  tr.row-expired .id-cell .id-badge {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #991b1b;
+  }
+  tr.row-warning {
+    background: linear-gradient(90deg, #fffbeb 0%, #ffffff 70%) !important;
+  }
+  tr.row-warning:nth-child(even) {
+    background: linear-gradient(90deg, #fef3c7 0%, #f8fafc 70%) !important;
+  }
+
+  /* Legend strip */
+  .legend-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 7px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 8px;
+    color: #475569;
+  }
+  .legend-strip .legend-title {
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+    margin-right: 4px;
+  }
+  .legend-strip .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 
   /* ── Footer ── */
   .report-footer {
@@ -324,10 +518,18 @@ function buildMasterlistHtml(options: MasterlistPrintOptions): string {
   const getExitLampSymbol = (status?: string) => {
     if (!status) return '<span class="dim">—</span>';
     switch (status) {
-      case 'Installed': return '<span style="color:#10b981;font-size:14px;">✓</span>';
-      case 'Not Installed': return '<span style="color:#ef4444;font-size:14px;">✗</span>';
-      case 'Not Working': return '<span style="color:#f59e0b;font-size:14px;">⚠</span>';
-      default: return `<span class="dim">${escapeHtml(status)}</span>`;
+      case 'Installed':
+        return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span class="exit-lamp-symbol installed">✓</span>
+          <span style="font-size:7.5px;color:#047857;font-weight:700;">Installed</span>
+        </div>`;
+      case 'Not Installed':
+        return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span class="exit-lamp-symbol not-installed">✗</span>
+          <span style="font-size:7.5px;color:#b91c1c;font-weight:700;">Not Installed</span>
+        </div>`;
+      default:
+        return `<span class="dim">${escapeHtml(status)}</span>`;
     }
   };
 
@@ -335,37 +537,78 @@ function buildMasterlistHtml(options: MasterlistPrintOptions): string {
     const typeColor = getTypeBadgeStyle(r.type);
     const isEmergencyLamp = r.type === 'Emergency Lamp';
 
-    const details: string[] = [];
-    if (r.zone) details.push(`Zone: ${escapeHtml(r.zone)}`);
-    if (r.placement) details.push(`Placement: ${escapeHtml(r.placement)}`);
-    if (r.extinguisher_type) details.push(`Type: ${escapeHtml(r.extinguisher_type)}`);
-    if (r.weight_kg) details.push(`Weight: ${escapeHtml(String(r.weight_kg))} kg`);
-    if (r.start_date) details.push(`Start: ${escapeHtml(r.start_date)}`);
+    // Build chips for details
+    const chips: string[] = [];
+    if (r.zone) chips.push(`<span class="chip info"><span class="chip-icon sky"></span>${escapeHtml(r.zone)}</span>`);
+    if (r.placement) chips.push(`<span class="chip neutral">${escapeHtml(r.placement)}</span>`);
+    if (r.extinguisher_type) chips.push(`<span class="chip neutral">${escapeHtml(r.extinguisher_type)}</span>`);
+    if (r.weight_kg) chips.push(`<span class="chip gray">${escapeHtml(String(r.weight_kg))} kg</span>`);
+
+    let rowClass = '';
+    let expireChip = '';
     if (r.expire_date) {
       const exp = new Date(r.expire_date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       exp.setHours(0, 0, 0, 0);
       const days = Math.round((exp.getTime() - today.getTime()) / 86400000);
-      const cls = days < 0 ? 'expiry-expired' : days <= 30 ? 'expiry-soon' : '';
-      details.push(`Expire: <span class="${cls}">${escapeHtml(r.expire_date)}${days < 0 ? ' (expired)' : days <= 30 ? ` (${days}d left)` : ''}</span>`);
+      const formatted = formatDateIndo(r.expire_date);
+      if (days < 0) {
+        expireChip = `<span class="chip danger"><span class="chip-icon ember"></span>Expired ${Math.abs(days)}d</span>`;
+        rowClass = 'row-expired';
+      } else if (days <= 30) {
+        expireChip = `<span class="chip warn"><span class="chip-icon amber"></span>${days}d left</span>`;
+        if (!rowClass) rowClass = 'row-warning';
+      } else {
+        expireChip = `<span class="chip success"><span class="chip-icon gray"></span>${formatted}</span>`;
+      }
+      chips.push(expireChip);
     }
+    if (r.start_date) {
+      chips.push(`<span class="chip gray" title="Start Date">${formatDateIndo(r.start_date)}</span>`);
+    }
+
+    const detailsHtml = chips.length > 0
+      ? `<div class="detail-chips">${chips.join('')}</div>`
+      : '<span class="muted-text">— no details —</span>';
 
     const exitLampCell = isEmergencyLamp && isEmergencyLampFilter
       ? getExitLampSymbol(r.exit_lamp_status)
-      : (details.length > 0 ? details.join('<br/>') : '<span class="dim">—</span>');
+      : detailsHtml;
 
-    return `<tr>
-      <td class="dim">${idx + 1}</td>
-      <td class="id-cell">${escapeHtml(r.no_id || '')}</td>
-      <td><span class="type-chip" style="background:${typeColor}">${escapeHtml(r.type)}</span></td>
-      <td>${r.entity ? escapeHtml(r.entity) : '<span class="dim">—</span>'}</td>
-      <td>${r.facility ? escapeHtml(r.facility) : '<span class="dim">—</span>'}</td>
-      <td>${r.area ? escapeHtml(r.area) : '<span class="dim">—</span>'}</td>
-      <td>${r.location ? escapeHtml(r.location) : '<span class="dim">—</span>'}</td>
-      <td class="details-cell" style="text-align:center;">${exitLampCell}</td>
-      <td>${r.pic_1?.name ? escapeHtml(r.pic_1.name) : '<span class="dim">—</span>'}</td>
-      <td>${r.pic_2?.name ? escapeHtml(r.pic_2.name) : '<span class="dim">—</span>'}</td>
+    // PIC mini card
+    const renderPic = (pic?: { name?: string | null } | null, slotLabel?: string) => {
+      if (!pic?.name) return `<span class="muted-text">— ${slotLabel || ''}</span>`;
+      const initial = String(pic.name).charAt(0).toUpperCase();
+      return `<div class="pic-mini">
+        <span class="pic-avatar">${escapeHtml(initial)}</span>
+        <div>
+          <div class="pic-name">${escapeHtml(pic.name)}</div>
+          ${slotLabel ? `<div class="pic-role">${escapeHtml(slotLabel)}</div>` : ''}
+        </div>
+      </div>`;
+    };
+
+    // Area & location stack
+    const renderLocStack = (primary?: string | null, secondary?: string | null, secLabel = '') => {
+      if (!primary && !secondary) return '<span class="muted-text">—</span>';
+      return `<div class="info-stack">
+        ${primary ? `<div class="primary">${escapeHtml(primary)}</div>` : ''}
+        ${secondary ? `<div class="secondary">${secLabel ? escapeHtml(secLabel) + ': ' : ''}${escapeHtml(secondary)}</div>` : ''}
+      </div>`;
+    };
+
+    return `<tr class="${rowClass}">
+      <td style="text-align:center;"><span class="row-num">${idx + 1}</span></td>
+      <td class="id-cell"><span class="id-badge">${escapeHtml(r.no_id || '—')}</span></td>
+      <td><span class="type-chip" style="background:${typeColor}"><span class="dot"></span>${escapeHtml(r.type)}</span></td>
+      <td>${r.entity ? `<strong>${escapeHtml(r.entity)}</strong>` : '<span class="muted-text">—</span>'}</td>
+      <td>${r.facility ? escapeHtml(r.facility) : '<span class="muted-text">—</span>'}</td>
+      <td>${renderLocStack(r.area, null)}</td>
+      <td>${renderLocStack(r.location, r.zone, 'Zone')}</td>
+      <td class="details-cell">${exitLampCell}</td>
+      <td>${renderPic(r.pic_1, 'PIC Fire Expert')}</td>
+      <td>${renderPic(r.pic_2, 'PIC Area')}</td>
     </tr>`;
   }).join('\n');
 
@@ -385,6 +628,13 @@ ${PAGE_STYLES}
         <div class="report-company">PT YONGJIN JAVASUKA GARMENT</div>
         <div class="report-title">Fire Safety Masterlist</div>
         <div class="report-subtitle">Fire Protection Equipment Masterlist — Register of All Fire Safety Equipment</div>
+      </div>
+      <div class="report-docno">
+        <div class="docno-label">Document No.</div>
+        <div class="docno-value">FSM-${escapeHtml(new Date().toISOString().slice(0,10).replace(/-/g,''))}</div>
+        <div class="docno-row">Issued: <b>${escapeHtml(formatDateIndo(new Date().toISOString()))}</b></div>
+        <div class="docno-row">Total: <b>${total} Items</b></div>
+        ${isEmergencyLampFilter ? '<div class="docno-row" style="color:#f59e0b;font-weight:800;">⏰ Exit Lamp Mode</div>' : ''}
       </div>
     </div>
 
@@ -410,22 +660,41 @@ ${PAGE_STYLES}
     <table class="report-table">
       <thead>
         <tr>
-          <th style="width:22px">#</th>
+          <th style="width:32px">No.</th>
           <th>Equipment ID</th>
           <th>Type</th>
           <th>Entity</th>
           <th>Facility</th>
           <th>Area</th>
-          <th>Location</th>
-          <th>${isEmergencyLampFilter ? 'Exit Lamp' : 'Details'}</th>
-          <th>PIC 1</th>
-          <th>PIC 2</th>
+          <th>Location / Zone</th>
+          <th>${isEmergencyLampFilter ? 'Exit Lamp Status' : 'Details &amp; Expiry'}</th>
+          <th>PIC Fire Expert</th>
+          <th>PIC Area</th>
         </tr>
       </thead>
       <tbody>
 ${rowsHtml}
       </tbody>
     </table>
+
+    ${!isEmergencyLampFilter ? `
+    <div class="legend-strip">
+      <span class="legend-title">Legend</span>
+      <span class="legend-item"><span class="chip info"><span class="chip-icon sky"></span>Zone</span> Zone identifier</span>
+      <span class="legend-item"><span class="chip neutral">Placement</span> Mounting placement</span>
+      <span class="legend-item"><span class="chip gray">Weight</span> Extinguisher weight</span>
+      <span class="legend-item"><span class="chip success"><span class="chip-icon gray"></span>Valid</span> More than 30 days remaining</span>
+      <span class="legend-item"><span class="chip warn"><span class="chip-icon amber"></span>Soon</span> Expiring within 30 days</span>
+      <span class="legend-item"><span class="chip danger"><span class="chip-icon ember"></span>Expired</span> Past expiry date — replace now</span>
+    </div>
+    ` : `
+    <div class="legend-strip">
+      <span class="legend-title">Legend</span>
+      <span class="legend-item"><span class="exit-lamp-symbol installed" style="width:18px;height:18px;font-size:11px;">✓</span> Exit lamp installed &amp; working</span>
+      <span class="legend-item"><span class="exit-lamp-symbol not-installed" style="width:18px;height:18px;font-size:11px;">✗</span> Exit lamp not installed</span>
+      <span class="legend-item"><span class="exit-lamp-symbol not-working" style="width:18px;height:18px;font-size:11px;">⚠</span> Exit lamp installed but not working</span>
+    </div>
+    `}
 
     <div class="report-footer">
       <div class="note">

@@ -831,9 +831,9 @@ export default function AdminDashboard() {
                             return {
                                 ...e,
                                 // Add exit lamp status as a custom property
-                                exit_lamp_status: exitLampAnswer === 'NA' ? 'Not Installed' : 
-                                                  exitLampAnswer === 'YES' ? 'Installed' : 
-                                                  exitLampAnswer === 'NO' ? 'Not Working' : 'N/A'
+                                exit_lamp_status: exitLampAnswer === 'NA' ? 'Not Installed' :
+                                                  exitLampAnswer === 'YES' ? 'Installed' :
+                                                  exitLampAnswer === 'NO' ? 'Not Installed' : 'N/A'
                             };
                         }
                         return e;
