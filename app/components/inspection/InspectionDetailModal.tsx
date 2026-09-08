@@ -463,7 +463,7 @@ export default function InspectionDetailModal({ inspection, onClose, onEdit, the
         {/* Modal Footer */}
         <div className={`p-4 border-t flex items-center justify-between shrink-0 ${T.footer}`}>
           <span className={`text-xs ${T.footerText}`}>
-            Recorded at {new Date(inspection.created_at).toLocaleString()}
+            Recorded at {inspection.created_at ? new Date(inspection.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : '-'}
           </span>
           <button
             onClick={onClose}

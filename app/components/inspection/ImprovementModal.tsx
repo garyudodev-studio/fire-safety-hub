@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { getIndoDateString } from '@/app/lib/dateUtils';
 import CameraCapture from './CameraCapture';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 import ImageModal from '@/app/components/ui/ImageModal';
@@ -129,7 +130,7 @@ export default function ImprovementModal({
         // Default target date = 7 days from inspection or today
         const baseDate = inspection?.inspection_date ? new Date(inspection.inspection_date) : new Date();
         baseDate.setDate(baseDate.getDate() + 7);
-        setTargetDate(baseDate.toISOString().split('T')[0]);
+        setTargetDate(getIndoDateString(baseDate));
         
         setStatus('OPEN');
         setAfterPhotoUrl(null);
@@ -178,7 +179,7 @@ export default function ImprovementModal({
       }
 
       const isResolved = status === 'RESOLVED';
-      const completionDate = isResolved ? new Date().toISOString().split('T')[0] : null;
+      const completionDate = isResolved ? getIndoDateString() : null;
 
       const payload = {
         inspection_id: inspection.id,

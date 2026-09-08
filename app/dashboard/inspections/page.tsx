@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
+import { getIndoMonthYear } from '@/app/lib/dateUtils';
+
 
 import InspectionForm from '@/app/components/inspection/InspectionForm';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
@@ -444,8 +446,7 @@ export default function InspectionsPage() {
   }
 
   const setThisMonth = () => {
-    const now = new Date();
-    setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    setSelectedMonth(getIndoMonthYear());
     setSelectedWeek('');
   };
   const clearPeriod = () => {

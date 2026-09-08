@@ -47,8 +47,8 @@ export default function CameraCapture({
 
     ctx.drawImage(img, 0, 0, w, h);
 
-    // Timestamp overlay
-    const timestamp = new Date().toLocaleString();
+    // Timestamp overlay (Indonesia WIB)
+    const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
     const fontSize = Math.max(10, Math.round(h * 0.03));
     ctx.font = `bold ${fontSize}px sans-serif`;
     const tw = ctx.measureText(timestamp).width;

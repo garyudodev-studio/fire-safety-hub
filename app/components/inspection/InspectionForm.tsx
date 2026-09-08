@@ -5,6 +5,7 @@ import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { getChecklistForType, EquipmentChecklist } from '@/app/lib/inspectionChecklists';
 import CameraCapture from './CameraCapture';
 import QRScannerModal from '@/app/components/ui/QRScannerModal';
+import { getIndoDateString, getWeekAndMonthYearFromDate } from '@/app/lib/dateUtils';
 
 interface EquipmentItem {
   id: string;
@@ -100,17 +101,12 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
   const [equipmentPhotoUrl, setEquipmentPhotoUrl] = useState<string | null>(null);
   const [checklistPhotoUrl, setChecklistPhotoUrl] = useState<string | null>(null);
   const [inspectorName, setInspectorName] = useState<string>('');
-  const [inspectionDate, setInspectionDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [inspectionDate, setInspectionDate] = useState<string>(() => getIndoDateString());
 
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
-  
-  // Auto calculated Week and Month/Year derived from Inspection Date
-  const dateParts = inspectionDate.split('-');
-  const week = dateParts.length === 3 ? `Week ${Math.min(4, Math.ceil(parseInt(dateParts[2], 10) / 7))}` : 'Week 1';
-  const monthYear = dateParts.length === 3 ? `${dateParts[1]}/${dateParts[0]}` : '';
+
+  const { week, monthYear } = getWeekAndMonthYearFromDate(inspectionDate);
 
   const [remarks, setRemarks] = useState('');
   const [actionTaken, setActionTaken] = useState('');
@@ -221,7 +217,7 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
         setChecklist(cl);
         setAnswers(editRecord.answers || {});
         setInspectorName(editRecord.inspector_name || '');
-        setInspectionDate(editRecord.inspection_date || new Date().toISOString().split('T')[0]);
+        setInspectionDate(editRecord.inspection_date || getIndoDateString());
         setRemarks(editRecord.remarks || '');
         setActionTaken(editRecord.action_taken || '');
 
