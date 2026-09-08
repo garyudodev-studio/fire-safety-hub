@@ -119,41 +119,71 @@ function absolutizePaths(html: string): string {
 export function resolveMonthFormPair(
   target: PrintInspectionRecord,
   allRecords: PrintInspectionRecord[]
-): { rightInsp: PrintInspectionRecord; leftInsp: PrintInspectionRecord | null } {
-  const sameMonthEquip = allRecords
-    .filter(
-      (r) =>
-        r.equipment_id === target.equipment_id &&
-        r.month_year === target.month_year
-    )
-    .sort((a, b) => {
-      const wA = parseInt(a.week) || 0;
-      const wB = parseInt(b.week) || 0;
-      if (wA !== wB) return wA - wB;
-      return (a.inspection_date || '').localeCompare(b.inspection_date || '');
+): { rightInsp: PrintInspectionRecord | null; leftInsp: PrintInspectionRecord | null } {
+  // Filter all records for the same equipment and month
+  const sameMonthEquip = allRecords.filter(
+    (r) =>
+      r.equipment_id === target.equipment_id &&
+      r.month_year === target.month_year
+  );
+
+  // Group by distinct week (e.g. "Week 1", "Week 2") to avoid duplicate week entries
+  const weeksMap = new Map<string, PrintInspectionRecord>();
+  sameMonthEquip
+    .sort((a, b) => (a.inspection_date || '').localeCompare(b.inspection_date || ''))
+    .forEach((r) => {
+      const normWeek = (r.week || '').trim() || 'Week 1';
+      weeksMap.set(normWeek, r);
     });
 
-  if (sameMonthEquip.length === 0) {
-    return { rightInsp: target, leftInsp: null };
+  // Sort unique week records by week number ascending
+  const uniqueWeeks = Array.from(weeksMap.values()).sort((a, b) => {
+    const wA = parseInt((a.week || '').replace(/[^0-9]/g, ''), 10) || 0;
+    const wB = parseInt((b.week || '').replace(/[^0-9]/g, ''), 10) || 0;
+    if (wA !== wB) return wA - wB;
+    return (a.inspection_date || '').localeCompare(b.inspection_date || '');
+  });
+
+  if (uniqueWeeks.length === 0) {
+    return { leftInsp: target, rightInsp: null };
   }
 
-  // Right Column = latest inspection for this equipment in this month
-  const rightInsp = sameMonthEquip[sameMonthEquip.length - 1];
+  if (uniqueWeeks.length === 1) {
+    // Only 1 distinct week in month -> left column gets that week, right column is empty
+    return { leftInsp: uniqueWeeks[0], rightInsp: null };
+  }
 
-  // Left Column = previous week inspection for this equipment in this month (if available)
-  const leftInsp = sameMonthEquip.length > 1 ? sameMonthEquip[sameMonthEquip.length - 2] : null;
+  // 2 or more distinct weeks in month -> fill left column with earlier week, right column with later week
+  const targetWeekNorm = (target.week || '').trim();
+  const targetIdx = uniqueWeeks.findIndex((r) => (r.week || '').trim() === targetWeekNorm);
 
-  return { rightInsp, leftInsp };
+  let leftInsp: PrintInspectionRecord;
+  let rightInsp: PrintInspectionRecord;
+
+  if (targetIdx <= 0) {
+    leftInsp = uniqueWeeks[0];
+    rightInsp = uniqueWeeks[1];
+  } else {
+    leftInsp = uniqueWeeks[targetIdx - 1];
+    rightInsp = uniqueWeeks[targetIdx];
+  }
+
+  return { leftInsp, rightInsp };
 }
 
 function fillInspectionPage(
   container: Element,
-  rightInsp: PrintInspectionRecord,
+  rightInsp: PrintInspectionRecord | null | undefined,
   leftInsp: PrintInspectionRecord | null | undefined,
   signatures: Record<string, string | null>
 ) {
-  const equipment = rightInsp.equipment || leftInsp?.equipment;
-  const monthYear = rightInsp.month_year || leftInsp?.month_year || '';
+  const activeInsp = rightInsp || leftInsp;
+  if (!activeInsp) return;
+
+  const equipment = activeInsp.equipment;
+  const monthYear = activeInsp.month_year || '';
+  const eqNoId = activeInsp.equipment_no_id || '';
+  const eqType = activeInsp.equipment_type || '';
 
   // ── Identity info table: ID / AREA / LOCATION / Month-Year / Week ──
   const weekCells: Element[] = [];
@@ -164,7 +194,7 @@ function fillInspectionPage(
 
     if (/^(ALARM|APAR|HYDRANT|LIGHT)\s+ID$/.test(trimmed)) {
       const next = el.nextElementSibling;
-      if (next) next.textContent = `: ${rightInsp.equipment_no_id}`;
+      if (next) next.textContent = `: ${eqNoId}`;
     } else if (trimmed === 'AREA') {
       const next = el.nextElementSibling;
       if (next) next.textContent = `: ${equipment?.area || ''}`;
@@ -194,7 +224,7 @@ function fillInspectionPage(
   const checklistTable = container.querySelector('.checklist-table');
   if (!checklistTable) return;
 
-  // ── Date column in checklist header (Left = previous week, Right = latest) ──
+  // ── Date column in checklist header (Left = 1st week, Right = 2nd week) ──
   const dateCells: Element[] = [];
   checklistTable.querySelectorAll('td').forEach((cell) => {
     const el = cell as HTMLElement;
@@ -219,7 +249,7 @@ function fillInspectionPage(
   // ── Mark checklist answers ──
   // Column 1 (Left): cells[2] for YES/NA, cells[3] for NO
   // Column 2 (Right): cells[4] for YES/NA, cells[5] for NO
-  const checklist = getChecklistForType(rightInsp.equipment_type);
+  const checklist = getChecklistForType(eqType);
   const leftAnswers: ('YES' | 'NO' | 'NA' | undefined)[] = [];
   const rightAnswers: ('YES' | 'NO' | 'NA' | undefined)[] = [];
 
@@ -232,7 +262,7 @@ function fillInspectionPage(
 
   let ansIdx = 0;
   checklistTable.querySelectorAll('tr').forEach((tr) => {
-    if (ansIdx >= rightAnswers.length) return;
+    if (ansIdx >= leftAnswers.length && ansIdx >= rightAnswers.length) return;
     const cells = tr.querySelectorAll('td');
     if (cells.length < 6) return; // header / section rows
     if (!(cells[1].textContent || '').trim()) return;
@@ -348,7 +378,7 @@ function fillInspectionPage(
   // ── Equipment Sticker QR Code ──
   const qrImg = container.querySelector('.equipment-qr-img') as HTMLImageElement | null;
   if (qrImg) {
-    const targetId = rightInsp.equipment_id || rightInsp.equipment_no_id;
+    const targetId = activeInsp.equipment_id || activeInsp.equipment_no_id;
     const qrData = encodeURIComponent(targetId);
     qrImg.setAttribute('src', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${qrData}`);
   }
@@ -412,11 +442,13 @@ export async function buildInspectionPrintPages(
 
   for (let i = 0; i < uniquePairs.length; i++) {
     const { rightInsp, leftInsp } = uniquePairs[i];
+    const activeInsp = rightInsp || leftInsp;
+    if (!activeInsp) continue;
 
-    let raw = await loadTemplateHtml(rightInsp.equipment_type);
+    let raw = await loadTemplateHtml(activeInsp.equipment_type);
 
     // ── Pre-process raw template string matching dashboard sticker QR (app/dashboard/page.tsx line 630) ──
-    const targetId = rightInsp.equipment_id || rightInsp.equipment_no_id;
+    const targetId = activeInsp.equipment_id || activeInsp.equipment_no_id;
     const qrEncoded = encodeURIComponent(targetId);
     raw = raw.replace(/data=[^"']*/g, `data=${qrEncoded}`);
 
