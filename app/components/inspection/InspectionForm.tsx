@@ -6,6 +6,7 @@ import { getChecklistForType, EquipmentChecklist } from '@/app/lib/inspectionChe
 import CameraCapture from './CameraCapture';
 import QRScannerModal from '@/app/components/ui/QRScannerModal';
 import { getIndoDateString, getWeekAndMonthYearFromDate } from '@/app/lib/dateUtils';
+import { fetchAllRows } from '@/app/lib/pagedFetch';
 
 interface EquipmentItem {
   id: string;
@@ -139,17 +140,20 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
     const loadData = async () => {
       setFetchingData(true);
 
-      // Fetch Equipment
-      const { data: eqData } = await supabase
-        .from('equipment')
-        .select(`
+      // Fetch Equipment (all pages — table exceeds the 1000-row default limit)
+      const eqData = await fetchAllRows<EquipmentItem>(
+        supabase,
+        'equipment',
+        `
           id, no_id, type, entity, facility, area, location,
           pic_1:pic_1_id(id, name, phone),
           pic_2:pic_2_id(id, name, phone)
-        `)
-        .order('no_id', { ascending: true });
+        `,
+        'no_id',
+        true
+      );
 
-      const loadedEquipments = eqData ? (eqData as unknown as EquipmentItem[]) : [];
+      const loadedEquipments = eqData ?? [];
       setMasterlist(loadedEquipments);
 
       // Fetch PICs
@@ -162,13 +166,13 @@ export default function InspectionForm({ editRecord, onSuccess, onCancel }: Insp
         setPicList(picsData as PicItem[]);
       }
 
-      // Fetch inspections (read-only) for weekly coverage display against the masterlist
-      const { data: inspData } = await supabase
-        .from('inspections')
-        .select('id, equipment_id, month_year, week');
-      if (inspData) {
-        setWeekInspections(inspData as { id: string; equipment_id: string; month_year: string; week: string }[]);
-      }
+      // Fetch inspections (read-only, all pages) for weekly coverage display against the masterlist
+      const inspData = await fetchAllRows<{ id: string; equipment_id: string; month_year: string; week: string }>(
+        supabase,
+        'inspections',
+        'id, equipment_id, month_year, week'
+      );
+      setWeekInspections(inspData);
 
       // Fetch current user role and pic
       const { data: sessionData } = await supabase.auth.getSession();

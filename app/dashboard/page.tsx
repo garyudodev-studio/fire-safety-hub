@@ -144,6 +144,7 @@ export default function AdminDashboard() {
     const [formData, setFormData] = useState(initialFormData);
     const [isSaving, setIsSaving] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [userRole, setUserRole] = useState<string>('inspector');
 
     // Photo upload state
     const [uploadingPhoto, setUploadingPhoto] = useState<{ id: string; slot: 'pic_1_photo' | 'pic_2_photo' } | null>(null);
@@ -188,6 +189,7 @@ export default function AdminDashboard() {
                     .single();
 
                 if (profile) {
+                    if ((profile as { role?: string }).role) setUserRole((profile as { role: string }).role);
                     const assignedEntity = profile.entity || (profile.pic as { entity?: string | null })?.entity;
                     const assignedFacility = profile.facility || (profile.pic as { facility?: string | null })?.facility;
                     if (assignedEntity) setFilterEntity(assignedEntity);
@@ -337,6 +339,14 @@ export default function AdminDashboard() {
     };
 
     const handleDelete = async (id: string) => {
+        // ★ Only admins may delete masterlist equipment. Staff-level deletes break
+        // the equipment_id link, orphan inspections/improvements and make
+        // already-inspected periods (e.g. 08/2026 Week 1) reappear as
+        // "Not Inspected" / OPEN on guest + reports pages.
+        if (userRole !== 'admin') {
+            setAlertModal({ isOpen: true, title: 'Not Allowed', message: 'Only admin can delete equipment. Please contact your administrator.', type: 'error' });
+            return;
+        }
         setConfirmModal({
             isOpen: true,
             title: 'Delete Equipment',
@@ -357,10 +367,16 @@ export default function AdminDashboard() {
                 }
 
                 // 2. Find and delete photos from related inspection logs
-                const { data: relatedInspections } = await supabase.from('inspections').select('photo_url').eq('equipment_id', id);
+                const { data: relatedInspections } = await supabase.from('inspections').select('id, photo_url').eq('equipment_id', id);
                 if (relatedInspections && relatedInspections.length > 0) {
                     const inspUrls = relatedInspections.map((i: { photo_url: string | null }) => i.photo_url);
                     await deleteStorageFiles(supabase, 'inspection_photos', inspUrls);
+                    // Cascade: remove CAPA/improvement rows linked to these inspections
+                    // so no orphan improvements remain after the delete.
+                    const inspIds = relatedInspections.map((i: { id: string }) => i.id).filter(Boolean);
+                    if (inspIds.length > 0) {
+                        await supabase.from('improvements').delete().in('inspection_id', inspIds);
+                    }
                     await supabase.from('inspections').delete().eq('equipment_id', id);
                 }
 
@@ -1296,13 +1312,15 @@ export default function AdminDashboard() {
                                         >
                                             <EditIcon /> Edit
                                         </button>
-                                        <button
-                                            onClick={() => handleDelete(item.id)}
-                                            title="Delete"
-                                            className="icon-btn-danger"
-                                        >
-                                            <TrashIcon />
-                                        </button>
+                                        {userRole === 'admin' && (
+                                            <button
+                                                onClick={() => handleDelete(item.id)}
+                                                title="Delete (Admin Only)"
+                                                className="icon-btn-danger"
+                                            >
+                                                <TrashIcon />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>);
                             })}
@@ -1439,13 +1457,15 @@ export default function AdminDashboard() {
                                                             >
                                                                 <EditIcon />
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDelete(item.id)}
-                                                                title="Delete"
-                                                                className="icon-btn-danger !p-1.5"
-                                                            >
-                                                                <TrashIcon />
-                                                            </button>
+                                                            {userRole === 'admin' && (
+                                                                <button
+                                                                    onClick={() => handleDelete(item.id)}
+                                                                    title="Delete (Admin Only)"
+                                                                    className="icon-btn-danger !p-1.5"
+                                                                >
+                                                                    <TrashIcon />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>

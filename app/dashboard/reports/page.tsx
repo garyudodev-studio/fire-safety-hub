@@ -9,6 +9,7 @@ import InspectionForm from '@/app/components/inspection/InspectionForm';
 import { printInspectionResults } from '@/app/lib/printInspectionResults';
 import { printResultReport } from '@/app/lib/printResultReport';
 import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
+import { fetchAllRows } from '@/app/lib/pagedFetch';
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 import { AlertModal, AlertState } from '@/app/components/ui/CustomModal';
 
@@ -451,39 +452,43 @@ export default function ReportsPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) { router.push('/'); return; }
 
-      const [inspRes, masterRes, profileRes, impRes] = await Promise.all([
-        supabase
-          .from('inspections')
-          .select(`*, equipment:equipment_id(location, facility, area, entity)`)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('equipment')
-          .select(`
+      // NOTE: fetch ALL pages — inspections exceeds PostgREST's 1000-row default
+      // limit; a truncated fetch silently drops the oldest records.
+      const [inspData, masterData, impData] = await Promise.all([
+        fetchAllRows<InspectionRecord>(
+          supabase,
+          'inspections',
+          `*, equipment:equipment_id(location, facility, area, entity)`
+        ),
+        fetchAllRows<EquipmentMaster>(
+          supabase,
+          'equipment',
+          `
             id, no_id, type, entity, facility, area, location, created_at, start_date,
             pic_1:pic_1_id(id, name, phone, image_profile, image_contact),
             pic_2:pic_2_id(id, name, phone, image_profile, image_contact)
-          `),
-        supabase
-          .from('profiles')
-          .select('role, entity, facility, pic:pic_id(entity, facility)')
-          .eq('id', sessionData.session.user.id)
-          .single(),
-        supabase
-          .from('improvements')
-          .select('*')
+          `
+        ),
+        fetchAllRows<ImprovementRecord>(supabase, 'improvements', '*'),
       ]);
 
-      if (!inspRes.error   && inspRes.data)   setInspections(inspRes.data as InspectionRecord[]);
-      if (!masterRes.error && masterRes.data)  setMasterlist(masterRes.data as EquipmentMaster[]);
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role, entity, facility, pic:pic_id(entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single();
 
-      if (impRes.data) {
+      setInspections(inspData);
+      setMasterlist(masterData);
+
+      {
         const map = new Map<string, ImprovementRecord>();
-        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
+        impData.forEach((imp) => map.set(imp.inspection_id, imp));
         setImprovementsMap(map);
       }
 
-      if (profileRes.data) {
-        const userProfile = profileRes.data;
+      if (profileData) {
+        const userProfile = profileData;
         if (userProfile.role) setUserRole(userProfile.role);
         const assignedEntity = userProfile.entity || userProfile.pic?.entity;
         const assignedFacility = userProfile.facility || userProfile.pic?.facility;

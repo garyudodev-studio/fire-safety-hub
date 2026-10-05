@@ -9,6 +9,7 @@ import InspectionDetailModal from '@/app/components/inspection/InspectionDetailM
 import ProtectedImage from '@/app/components/ui/ProtectedImage';
 import ImageModal from '@/app/components/ui/ImageModal';
 import { AlertModal, AlertState } from '@/app/components/ui/CustomModal';
+import { fetchAllRows } from '@/app/lib/pagedFetch';
 
 function getTypeBadgeColor(type: string): string {
   switch (type) {
@@ -68,25 +69,28 @@ export default function ImprovementsPage() {
         return;
       }
 
-      // Fetch inspections marked NEEDS_ATTENTION OR inspections with an existing improvement
-      const { data: inspData, error: inspErr } = await supabase
-        .from('inspections')
-        .select(`
-          *,
-          equipment:equipment_id(location, facility, area, entity)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (inspErr) {
-        setAlertModal({ isOpen: true, title: 'Error', message: inspErr.message, type: 'error' });
+      // Fetch inspections marked NEEDS_ATTENTION OR inspections with an existing improvement.
+      // NOTE: fetch ALL pages — inspections exceeds PostgREST's 1000-row default
+      // limit; a truncated fetch silently drops the oldest records.
+      let inspData: InspectionRecord[];
+      let impData: ImprovementRecord[];
+      try {
+        [inspData, impData] = await Promise.all([
+          fetchAllRows<InspectionRecord>(
+            supabase,
+            'inspections',
+            `
+              *,
+              equipment:equipment_id(location, facility, area, entity)
+            `
+          ),
+          fetchAllRows<ImprovementRecord>(supabase, 'improvements', '*'),
+        ]);
+      } catch (err) {
+        setAlertModal({ isOpen: true, title: 'Error', message: err instanceof Error ? err.message : 'Failed to fetch data.', type: 'error' });
         setLoading(false);
         return;
       }
-
-      // Fetch all improvements
-      const { data: impData } = await supabase
-        .from('improvements')
-        .select('*');
 
       // Fetch the logged-in user's assigned entity/facility for auto-filtering
       const { data: profileData } = await supabase
@@ -103,14 +107,12 @@ export default function ImprovementsPage() {
       }
 
       const impMap = new Map<string, ImprovementRecord>();
-      if (impData) {
-        (impData as ImprovementRecord[]).forEach((imp) => {
-          impMap.set(imp.inspection_id, imp);
-        });
-      }
+      impData.forEach((imp) => {
+        impMap.set(imp.inspection_id, imp);
+      });
 
       const combined: CombinedUnsafeRecord[] = [];
-      (inspData as InspectionRecord[]).forEach((insp) => {
+      inspData.forEach((insp) => {
         const imp = impMap.get(insp.id) || null;
         // Include if inspection needs attention OR if there is an improvement record
         if (insp.status === 'NEEDS_ATTENTION' || imp !== null) {

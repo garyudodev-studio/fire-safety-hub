@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
 import { deleteStorageFiles } from '@/app/lib/storageHelpers';
 import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
+import { fetchAllRows } from '@/app/lib/pagedFetch';
 import { getIndoMonthYear } from '@/app/lib/dateUtils';
 
 
@@ -219,33 +220,37 @@ export default function InspectionsPage() {
         return;
       }
 
-      const [profileRes, inspRes, masterRes, impRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('role, entity, facility, pic_id, pic:pic_id(id, name, entity, facility)')
-          .eq('id', sessionData.session.user.id)
-          .single(),
-        supabase
-          .from('inspections')
-          .select(`
+      // NOTE: fetch ALL pages — inspections exceeds PostgREST's 1000-row default
+      // limit; a truncated fetch silently drops the oldest records.
+      const [inspData, masterData, impData] = await Promise.all([
+        fetchAllRows<InspectionRecord>(
+          supabase,
+          'inspections',
+          `
             *,
             equipment:equipment_id(location, facility, area, entity)
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('equipment')
-          .select(`
+          `
+        ),
+        fetchAllRows<EquipmentMaster>(
+          supabase,
+          'equipment',
+          `
             id, no_id, type, entity, facility, area, location, created_at, start_date,
             pic_1:pic_1_id(id, name, phone, image_profile, image_contact),
             pic_2:pic_2_id(id, name, phone, image_profile, image_contact)
-          `),
-        supabase
-          .from('improvements')
-          .select('*'),
+          `
+        ),
+        fetchAllRows<ImprovementRecord>(supabase, 'improvements', '*'),
       ]);
 
-      if (profileRes.data) {
-        const userProfile = profileRes.data;
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role, entity, facility, pic_id, pic:pic_id(id, name, entity, facility)')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileData) {
+        const userProfile = profileData;
         if (userProfile.role) setUserRole(userProfile.role);
         setUserPicId(userProfile.pic_id ?? userProfile.pic?.id ?? null);
         // Non-admin (PIC / inspector) is auto-scoped to their assigned entity/facility.
@@ -258,15 +263,11 @@ export default function InspectionsPage() {
         }
       }
 
-      if (!inspRes.error && inspRes.data) {
-        setInspections(inspRes.data as InspectionRecord[]);
-      }
-      if (!masterRes.error && masterRes.data) {
-        setMasterlist(masterRes.data as EquipmentMaster[]);
-      }
-      if (impRes.data) {
+      setInspections(inspData);
+      setMasterlist(masterData);
+      {
         const map = new Map<string, ImprovementRecord>();
-        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
+        impData.forEach((imp) => map.set(imp.inspection_id, imp));
         setImprovementsMap(map);
       }
       setLoading(false);
@@ -279,6 +280,13 @@ export default function InspectionsPage() {
   const [alertModal, setAlertModal] = useState<AlertState | null>(null);
 
   const handleDelete = async (id: string, noId: string) => {
+    // ★ Only admins may delete inspection logs. Staff/inspector deletes previously
+    // caused equipment to reappear as "Not Inspected" (and CAPA as OPEN) on the
+    // guest + reports pages for already-inspected periods such as 08/2026 Week 1.
+    if (userRole !== 'admin') {
+      setAlertModal({ isOpen: true, title: 'Not Allowed', message: 'Only admin can delete inspection logs. Please contact your administrator.', type: 'error' });
+      return;
+    }
     setConfirmModal({
       isOpen: true,
       title: 'Delete Inspection Log',
@@ -290,9 +298,18 @@ export default function InspectionsPage() {
           await deleteStorageFiles(supabase, 'inspection_photos', [targetItem.photo_url]);
         }
 
+        // Cascade: remove the linked CAPA/improvement as well so no orphan
+        // improvement rows remain pointing at a deleted inspection.
+        await supabase.from('improvements').delete().eq('inspection_id', id);
+
         const { error } = await supabase.from('inspections').delete().eq('id', id);
         if (!error) {
           setInspections((prev) => prev.filter((item) => item.id !== id));
+          setImprovementsMap((prev) => {
+            const next = new Map(prev);
+            next.delete(id);
+            return next;
+          });
         } else {
           setAlertModal({ isOpen: true, title: 'Error', message: `Failed to delete: ${error.message}`, type: 'error' });
         }
@@ -831,13 +848,15 @@ export default function InspectionsPage() {
                               >
                                 View Detail
                               </button>
-                              <button
-                                onClick={() => handleDelete(item.id, item.equipment_no_id)}
-                                className="btn btn-danger-soft text-xs px-2.5 py-1"
-                                title="Delete inspection"
-                              >
-                                Delete
-                              </button>
+                              {userRole === 'admin' && (
+                                <button
+                                  onClick={() => handleDelete(item.id, item.equipment_no_id)}
+                                  className="btn btn-danger-soft text-xs px-2.5 py-1"
+                                  title="Delete inspection (Admin Only)"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

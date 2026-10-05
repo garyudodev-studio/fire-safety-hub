@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/app/lib/supabaseClient';
+import { fetchAllRows } from '@/app/lib/pagedFetch';
 import { getPeriodEndDate, equipmentExistsInPeriod } from '@/app/lib/equipmentPeriod';
 import InspectionDetailModal, { InspectionRecord } from '@/app/components/inspection/InspectionDetailModal';
 import InspectionChecklistModal from '@/app/components/inspection/InspectionChecklistModal';
@@ -66,6 +67,34 @@ function formatMonthYear(monthYear: string): string {
   const year = parseInt(yyyy, 10);
   if (!mm || isNaN(monthNum) || isNaN(year)) return monthYear;
   return `${new Date(Date.UTC(year, monthNum - 1)).toLocaleString('en-US', { month: 'long' })} ${year}`;
+}
+
+// ─── Period helpers ───────────────────────────────────────────────────────────
+// Week values are stored as "Week N" but URLs/legacy data may carry "1", "W1",
+// "week 1", etc. Normalize everything to "Week N" so filtering, coverage and
+// period-end calculations never silently mismatch (parseInt("Week 1") is NaN,
+// which previously broke week sorting and ?week=1 URL filters).
+function normalizeWeek(value?: string | null): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (/^week\s+\d+$/i.test(trimmed)) {
+    return `Week ${parseInt(trimmed.replace(/[^0-9]/g, ''), 10)}`;
+  }
+  const digits = trimmed.replace(/[^0-9]/g, '');
+  if (digits) return `Week ${parseInt(digits, 10)}`;
+  return trimmed;
+}
+
+function weekNumber(value?: string | null): number {
+  const n = parseInt((value ?? '').replace(/[^0-9]/g, ''), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+// Fallback coverage key when an equipment row was deleted & recreated with a
+// new UUID: same physical equipment (same no_id + type) still counts as
+// inspected for the period if an inspection with that no_id + type exists.
+function coverageKey(noId?: string | null, type?: string | null): string {
+  return `${(noId ?? '').trim().toLowerCase()}|${(type ?? '').trim().toLowerCase()}`;
 }
 
 function CapaStatusBadge({ improvement }: { improvement?: ImprovementRecord | null }) {
@@ -242,18 +271,21 @@ function TypeBreakdown({
   const [collapsed, setCollapsed] = useState(true);
 
   const inspectedIds = new Set(inspections.map((i) => i.equipment_id));
+  const inspectedKeys = new Set(inspections.map((i) => coverageKey(i.equipment_no_id, i.equipment_type)));
+  const isCovered = (e: EquipmentMaster) =>
+    inspectedIds.has(e.id) || inspectedKeys.has(coverageKey(e.no_id, e.type));
   const totalMasterlistAll = masterlist.length;
-  const uniqueAllInspected = masterlist.filter((e) => inspectedIds.has(e.id)).length;
+  const uniqueAllInspected = masterlist.filter((e) => isCovered(e)).length;
   const overallPending = Math.max(0, totalMasterlistAll - uniqueAllInspected);
   const overallCoverage = totalMasterlistAll > 0 ? Math.round((uniqueAllInspected / totalMasterlistAll) * 100) : 0;
 
   const rows = EQUIPMENT_TYPES.map((t) => {
     const typeMaster = masterlist.filter((e) => e.type === t);
     const totalEquip = typeMaster.length;
-    const typeInspected = typeMaster.filter((e) => inspectedIds.has(e.id));
+    const typeInspected = typeMaster.filter((e) => isCovered(e));
     const inspectedCount = typeInspected.length;
     const passCount = typeInspected.filter((e) =>
-      inspections.some((i) => i.equipment_id === e.id && i.status === 'PASS')
+      inspections.some((i) => (i.equipment_id === e.id || coverageKey(i.equipment_no_id, i.equipment_type) === coverageKey(e.no_id, e.type)) && i.status === 'PASS')
     ).length;
     const notInspected = Math.max(0, totalEquip - inspectedCount);
     const passRate = inspectedCount > 0 ? Math.round((passCount / inspectedCount) * 100) : null;
@@ -452,6 +484,27 @@ function Pic2AreaKpi({
     return map;
   }, [inspections]);
 
+  const inspByCoverageKey = useMemo(() => {
+    const map = new Map<string, InspectionRecord[]>();
+    for (const insp of inspections) {
+      const k = coverageKey(insp.equipment_no_id, insp.equipment_type);
+      const arr = map.get(k);
+      if (arr) arr.push(insp);
+      else map.set(k, [insp]);
+    }
+    return map;
+  }, [inspections]);
+
+  const inspectionsForEquip = useMemo(() => {
+    const byId = inspByEquipment;
+    const byKey = inspByCoverageKey;
+    return (e: EquipmentMaster): InspectionRecord[] => {
+      const hit = byId.get(e.id) ?? [];
+      if (hit.length > 0) return hit;
+      return byKey.get(coverageKey(e.no_id, e.type)) ?? [];
+    };
+  }, [inspByEquipment, inspByCoverageKey]);
+
   const allRows: Pic2KpiRow[] = useMemo(() => {
     const groups = new Map<string, { pic: PicPerson | null; items: EquipmentMaster[] }>();
     for (const equip of masterlist) {
@@ -470,11 +523,17 @@ function Pic2AreaKpi({
     const rows: Pic2KpiRow[] = [];
     for (const [key, { pic, items }] of groups) {
       const itemIds = new Set(items.map((e) => e.id));
-      const grpInspections = inspections.filter((i) => itemIds.has(i.equipment_id));
+      const itemKeys = new Set(items.map((e) => coverageKey(e.no_id, e.type)));
+      const grpInspections = inspections.filter(
+        (i) => itemIds.has(i.equipment_id) || itemKeys.has(coverageKey(i.equipment_no_id, i.equipment_type))
+      );
       const inspectedIds = new Set(grpInspections.map((i) => i.equipment_id));
-      const inspectedCount = items.filter((e) => inspectedIds.has(e.id)).length;
+      const inspectedKeys = new Set(grpInspections.map((i) => coverageKey(i.equipment_no_id, i.equipment_type)));
+      const inspectedCount = items.filter(
+        (e) => inspectedIds.has(e.id) || inspectedKeys.has(coverageKey(e.no_id, e.type))
+      ).length;
       const passEquip = items.filter((e) =>
-        (inspByEquipment.get(e.id) ?? []).some((i) => i.status === 'PASS')
+        inspectionsForEquip(e).some((i) => i.status === 'PASS')
       ).length;
       const unsafeInspections = grpInspections.filter((i) => i.status !== 'PASS');
       const resolvedCount = unsafeInspections.filter((i) => improvementsMap.get(i.id)?.status === 'RESOLVED').length;
@@ -551,7 +610,7 @@ function Pic2AreaKpi({
       });
     }
     return rows;
-  }, [masterlist, inspections, inspByEquipment, improvementsMap]);
+  }, [masterlist, inspections, inspectionsForEquip, improvementsMap]);
 
   // Default order: most PIC 1 support first.
   const rows = useMemo(() => {
@@ -936,7 +995,7 @@ function GuestReportsInner() {
   const [selectedEntity, setSelectedEntity] = useState(searchParams.get('entity') ?? 'All');
   const [selectedFacility, setSelectedFacility] = useState(searchParams.get('facility') ?? 'All');
   const [selectedMonth, setSelectedMonth] = useState(searchParams.get('month') ?? '');
-  const [selectedWeek, setSelectedWeek] = useState(searchParams.get('week') ?? '');
+  const [selectedWeek, setSelectedWeek] = useState(() => normalizeWeek(searchParams.get('week') ?? ''));
 
   // Tab & pagination
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
@@ -977,8 +1036,8 @@ function GuestReportsInner() {
 
   const weekOptions = useMemo(() => {
     const base = inspections.filter((i) => i.month_year === selectedMonth);
-    return Array.from(new Set(base.map((i) => i.week).filter(Boolean)))
-      .sort((a, b) => parseInt(a) - parseInt(b));
+    return Array.from(new Set(base.map((i) => normalizeWeek(i.week)).filter(Boolean)))
+      .sort((a, b) => weekNumber(a) - weekNumber(b));
   }, [inspections, selectedMonth]);
 
   // ── Fetch (guest: no auth required) ──
@@ -986,26 +1045,28 @@ function GuestReportsInner() {
     const fetchData = async () => {
       setLoading(true);
 
-      const [inspRes, masterRes, impRes] = await Promise.all([
-        supabase
-          .from('inspections')
-          .select(`*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact))`)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('equipment')
-          .select('id, no_id, type, entity, facility, area, location, created_at, start_date, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact)'),
-        supabase
-          .from('improvements')
-          .select('*')
+      // NOTE: fetch ALL pages — inspections already exceeds PostgREST's 1000-row
+      // default limit, and a truncated fetch silently drops the oldest records,
+      // making inspected equipment reappear as "Not Inspected".
+      const [inspData, masterData, impData] = await Promise.all([
+        fetchAllRows<InspectionRecord>(
+          supabase,
+          'inspections',
+          `*, equipment:equipment_id(location, facility, area, entity, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact))`
+        ),
+        fetchAllRows<EquipmentMaster>(
+          supabase,
+          'equipment',
+          'id, no_id, type, entity, facility, area, location, created_at, start_date, pic_1:pic_1_id(id, name, phone, image_profile, image_contact), pic_2:pic_2_id(id, name, phone, image_profile, image_contact)'
+        ),
+        fetchAllRows<ImprovementRecord>(supabase, 'improvements', '*'),
       ]);
 
-      if (!inspRes.error && inspRes.data) setInspections(inspRes.data as InspectionRecord[]);
-      if (!masterRes.error && masterRes.data) setMasterlist(masterRes.data as EquipmentMaster[]);
+      setInspections(inspData);
+      setMasterlist(masterData);
 
       const map = new Map<string, ImprovementRecord>();
-      if (impRes.data) {
-        (impRes.data as ImprovementRecord[]).forEach((imp) => map.set(imp.inspection_id, imp));
-      }
+      impData.forEach((imp) => map.set(imp.inspection_id, imp));
       setImprovementsMap(map);
 
       setLastFetched(new Date());
@@ -1075,7 +1136,7 @@ function GuestReportsInner() {
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
 
       const matchMonth = !selectedMonth || item.month_year === selectedMonth;
-      const matchWeek = !selectedWeek || item.week === selectedWeek;
+      const matchWeek = !selectedWeek || normalizeWeek(item.week) === selectedWeek;
 
       return matchSearch && matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
@@ -1124,7 +1185,7 @@ function GuestReportsInner() {
     : 100;
 
   const periodText = useMemo(() => {
-    if (selectedMonth && selectedWeek) return `Week ${selectedWeek} · ${formatMonthYear(selectedMonth)}`;
+    if (selectedMonth && selectedWeek) return `${selectedWeek} · ${formatMonthYear(selectedMonth)}`;
     if (selectedMonth) return formatMonthYear(selectedMonth);
     return 'All Recorded Dates';
   }, [selectedMonth, selectedWeek]);
@@ -1144,21 +1205,34 @@ function GuestReportsInner() {
       const matchEntity = selectedEntity === 'All' || entity === selectedEntity;
       const matchFacility = selectedFacility === 'All' || facility === selectedFacility;
       const matchMonth = !selectedMonth || item.month_year === selectedMonth;
-      const matchWeek = !selectedWeek || item.week === selectedWeek;
+      const matchWeek = !selectedWeek || normalizeWeek(item.week) === selectedWeek;
       return matchType && matchEntity && matchFacility && matchMonth && matchWeek;
     });
   }, [inspections, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek]);
 
-  // Match by the real equipment primary key (robust vs no_id string/whitespace mismatches).
+  // Match by the real equipment primary key (robust vs no_id string/whitespace
+  // mismatches). Fall back to normalized no_id + type so equipment that was
+  // deleted & recreated (new UUID, same physical unit) is NOT falsely listed
+  // as "Not Inspected" when its inspection still exists under the old UUID.
   const inspectedEquipmentIds = useMemo(
     () => new Set(scopeInspections.map(i => i.equipment_id)),
     [scopeInspections]
   );
+  const inspectedCoverageKeys = useMemo(
+    () => new Set(scopeInspections.map((i) => coverageKey(i.equipment_no_id, i.equipment_type))),
+    [scopeInspections]
+  );
+  const isInspected = useMemo(() => {
+    const ids = inspectedEquipmentIds;
+    const keys = inspectedCoverageKeys;
+    return (m: EquipmentMaster) =>
+      ids.has(m.id) || keys.has(coverageKey(m.no_id, m.type));
+  }, [inspectedEquipmentIds, inspectedCoverageKeys]);
 
   const totalMasterlistCount = filteredMasterlist.length;
   const inspectedMasterlist = useMemo(
-    () => filteredMasterlist.filter((m) => inspectedEquipmentIds.has(m.id)),
-    [filteredMasterlist, inspectedEquipmentIds]
+    () => filteredMasterlist.filter((m) => isInspected(m)),
+    [filteredMasterlist, isInspected]
   );
   const inspectedCount = inspectedMasterlist.length;
   const notInspectedCount = Math.max(0, totalMasterlistCount - inspectedCount);
@@ -1166,9 +1240,9 @@ function GuestReportsInner() {
   // ★ Uninspected equipment list from the masterlist
   const uninspectedRows = useMemo(() => {
     return filteredMasterlist
-      .filter((m) => !inspectedEquipmentIds.has(m.id))
+      .filter((m) => !isInspected(m))
       .sort((a, b) => a.no_id.localeCompare(b.no_id));
-  }, [filteredMasterlist, inspectedEquipmentIds]);
+  }, [filteredMasterlist, isInspected]);
 
   // Reset pages when filters change
   const filterSignature = [searchQuery, selectedType, selectedEntity, selectedFacility, selectedMonth, selectedWeek].join('|');
@@ -1670,7 +1744,7 @@ function GuestReportsInner() {
                 <label className="field-label text-[10px]">Week</label>
                 <select
                   value={selectedWeek}
-                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  onChange={(e) => setSelectedWeek(normalizeWeek(e.target.value))}
                   disabled={!selectedMonth}
                   className="input min-w-0 text-xs w-full sm:w-36"
                 >
